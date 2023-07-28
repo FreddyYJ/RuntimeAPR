@@ -17,6 +17,9 @@ import platform
 # showing it what we need.
 #
 import argparse
+
+from . import Instrumenter, RuntimeAPRFileMatcher, runtime_apr_wrap_pytest,RuntimeAPRImportManager
+
 ap = argparse.ArgumentParser(prog='slipcover')
 ap.add_argument('--branch', action='store_true', help="measure both branch and line coverage")
 ap.add_argument('--json', action='store_true', help="select JSON output")
@@ -55,7 +58,8 @@ base_path = Path(args.script).resolve().parent if args.script \
             else Path('.').resolve()
 
 
-file_matcher = sc.FileMatcher()
+# file_matcher = sc.FileMatcher()
+file_matcher = RuntimeAPRFileMatcher()
 
 if args.source:
     for s in args.source.split(','):
@@ -68,13 +72,15 @@ if args.omit:
         file_matcher.addOmit(o)
 
 
-sci = sc.Slipcover(collect_stats=args.stats, immediate=args.immediate,
-                   d_miss_threshold=args.threshold, branch=args.branch,
-                   skip_covered=args.skip_covered, disassemble=args.dis)
+# sci = sc.Slipcover(collect_stats=args.stats, immediate=args.immediate,
+#                    d_miss_threshold=args.threshold, branch=args.branch,
+#                    skip_covered=args.skip_covered, disassemble=args.dis)
+sci=Instrumenter()
 
 
 if not args.dont_wrap_pytest:
-    sc.wrap_pytest(sci, file_matcher)
+    # sc.wrap_pytest(sci, file_matcher)
+    runtime_apr_wrap_pytest(sci, file_matcher)
 
 
 
@@ -94,7 +100,7 @@ def sci_atexit():
     else:
         print_coverage(sys.stdout)
 
-if not args.silent:
+if not args.silent and False:
     atexit.register(sci_atexit)
 
 
@@ -125,10 +131,11 @@ if args.script:
 else:
     import runpy
     sys.argv = [*args.module, *args.script_or_module_args]
-    with sc.ImportManager(sci, file_matcher):
+    # with sc.ImportManager(sci, file_matcher):
+    with RuntimeAPRImportManager(sci, file_matcher):
         runpy.run_module(*args.module, run_name='__main__', alter_sys=True)
 
-if args.fail_under:
+if args.fail_under and False:
     cov = sci.get_coverage()
     if cov['summary']['percent_covered'] < args.fail_under:
         sys.exit(2)
