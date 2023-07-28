@@ -4,6 +4,8 @@ from bytecode import Instr,Bytecode,Label,dump_bytecode
 class Instrumenter:
     def insert_try_except(self,code:CodeType):
         bc=Bytecode.from_code(code)
+        # print(code.co_filename)
+        # dump_bytecode(bc,lineno=True)
         new_bc=[]
         delta=0
         skip_insert=False
@@ -86,8 +88,16 @@ class Instrumenter:
             elif skip_insert:
                 skip_insert=False
             else:
+                # Import Develoop
+                if i==0:
+                    new_bc.append(Instr('LOAD_CONST',0,lineno=instr.lineno))
+                    new_bc.append(Instr('LOAD_CONST',('Develoop',),lineno=instr.lineno))
+                    new_bc.append(Instr('IMPORT_NAME','slipcover.jurigged.loop',lineno=instr.lineno))
+                    new_bc.append(Instr('IMPORT_FROM','Develoop',lineno=instr.lineno))
+                    new_bc.append(Instr('STORE_NAME','Develoop',lineno=instr.lineno))
+                    new_bc.append(Instr('POP_TOP',lineno=instr.lineno))
                 new_bc.append(instr)
-
+                    
         new_bytecode=Bytecode(new_bc)
         # dump_bytecode(new_bytecode,lineno=True)
         return new_bytecode.to_code()
