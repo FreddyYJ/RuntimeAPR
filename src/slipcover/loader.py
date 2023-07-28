@@ -1,3 +1,4 @@
+import ast
 from importlib import machinery
 from importlib.abc import Loader, MetaPathFinder
 from pathlib import Path
@@ -31,10 +32,10 @@ class RuntimeAPRLoader(Loader):
 
     def exec_module(self, module):
         # branch coverage requires pre-instrumentation from source
-        # if self.sci.branch and isinstance(self.orig_loader, machinery.SourceFileLoader) and self.origin.exists():
-        #     code = compile(t, str(self.origin), "exec")
-        # else:
-        code = self.orig_loader.get_code(module.__name__)
+        if isinstance(self.orig_loader, machinery.SourceFileLoader) and self.origin.exists():
+            code = compile(ast.parse(self.origin.read_text()), str(self.origin), "exec")
+        else:
+            code = self.orig_loader.get_code(module.__name__)
 
         code = self.sci.insert_try_except(code)
         exec(code, module.__dict__)
@@ -163,11 +164,10 @@ def runtime_apr_wrap_pytest(sci: Instrumenter, file_matcher: RuntimeAPRFileMatch
 
     for f in Slipcover.find_functions(pyrewrite.__dict__.values(), set()):
         if 'exec' in f.__code__.co_names:
-            consts=list(f.__code__.co_consts)
-            consts.append(exec_wrapper)
-            f.__code__.co_consts=tuple(consts)
-
-            f.__code__.co_names['exec']=exec_wrapper
+            # replaces={}
+            # replaces['co_consts']=list(f.__code__.co_consts).append(exec_wrapper)
+            # f.__code__=f.__code__.replace(**replaces)
+            f.__globals__['exec']=exec_wrapper
 
     if False:
         import inspect

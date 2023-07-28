@@ -1,8 +1,8 @@
-from types import CodeType, FunctionType
+from types import CodeType
 from bytecode import Instr,Bytecode,Label,dump_bytecode
 
 class Instrumenter:
-    def insert_try_except(code:CodeType,target:FunctionType):
+    def insert_try_except(self,code:CodeType):
         bc=Bytecode.from_code(code)
         new_bc=[]
         delta=0
@@ -86,5 +86,5 @@ class Instrumenter:
                 new_bc.append(instr)
 
         new_bytecode=Bytecode(new_bc)
-        dump_bytecode(new_bytecode,lineno=True)
+        # dump_bytecode(new_bytecode,lineno=True)
         return new_bytecode.to_code()
