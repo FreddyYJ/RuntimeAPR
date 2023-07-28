@@ -120,11 +120,12 @@ if args.script:
 
     with open(args.script, "r") as f:
         t = ast.parse(f.read())
-        if args.branch:
+        if False and args.branch:
             t = br.preinstrument(t)
         code = compile(t, str(Path(args.script).resolve()), "exec")
 
-    code = sci.instrument(code)
+    # code = sci.instrument(code)
+    code = sci.insert_try_except(code)
     with sc.ImportManager(sci, file_matcher):
         exec(code, script_globals)
 
