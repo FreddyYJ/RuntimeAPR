@@ -48,14 +48,17 @@ class Instrumenter:
                 new_bc.append(Instr('POP_TOP', lineno=cur_lineno+1))
                 new_bc.append(Instr('STORE_NAME', 'e', lineno=cur_lineno+1))
                 new_bc.append(Instr('POP_TOP', lineno=cur_lineno+1))
+                # TODO: Add proper number of POP_TOPs: # of return values
                 new_bc+=pop_tops    # Pop return values
+
                 new_bc.append(Instr('SETUP_FINALLY',except_exception_label, lineno=cur_lineno+1)) # Exception in except block
-                new_bc.append(Instr('LOAD_NAME', 'print', lineno=cur_lineno+2))
+                new_bc.append(Instr('LOAD_NAME', 'print', lineno=cur_lineno+2)) # TODO: Call Develoop(fn, on_error=only_on_error, runner_class=interface)
                 new_bc.append(Instr('LOAD_NAME', 'e', lineno=cur_lineno+2))
                 new_bc.append(Instr('CALL_FUNCTION', 1, lineno=cur_lineno+2))
                 new_bc.append(Instr('POP_TOP', lineno=cur_lineno+2))
                 new_bc.append(Instr('POP_BLOCK', lineno=cur_lineno+2)) # Pop except block
                 new_bc.append(Instr('POP_EXCEPT', lineno=cur_lineno+2)) # Pop current Exception
+
                 new_bc.append(Instr('LOAD_CONST', None, lineno=cur_lineno+2))
                 new_bc.append(Instr('STORE_NAME', 'e', lineno=cur_lineno+2))
                 new_bc.append(Instr('DELETE_NAME', 'e', lineno=cur_lineno+2))

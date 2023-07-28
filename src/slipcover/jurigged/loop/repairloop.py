@@ -8,9 +8,10 @@ import ast
 import z3
 
 from .repairutils import BugInformation,prune_default_global_var,is_default_global
+from .develoop import RedirectDeveloopRunner
 from ..concolic import ConcolicTracer,get_zvalue,zint,symbolize,ControlDependenceGraph,Block,ConditionTree,ConditionNode
 
-class RepairloopRunner:
+class RepairloopRunner(RedirectDeveloopRunner):
     def __init__(self, fn:FunctionType, args, kwargs, bug_info:BugInformation):
         """
         :param fn: function to run
