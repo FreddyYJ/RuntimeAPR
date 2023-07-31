@@ -50,10 +50,26 @@ class Instrumenter:
                 new_bc.append(Instr('POP_TOP', lineno=cur_lineno+1))
                 new_bc.append(Instr('STORE_NAME', 'e', lineno=cur_lineno+1))
                 new_bc.append(Instr('POP_TOP', lineno=cur_lineno+1))
-                # TODO: Add proper number of POP_TOPs: # of return values
                 new_bc+=pop_tops    # Pop return values
 
                 new_bc.append(Instr('SETUP_FINALLY',except_exception_label, lineno=cur_lineno+1)) # Exception in except block
+                new_bc.append(Instr('LOAD_CONST',0,lineno=instr.lineno))
+                new_bc.append(Instr('LOAD_CONST',('RepairloopRunner',),lineno=instr.lineno))
+                new_bc.append(Instr('IMPORT_NAME','slipcover.jurigged.loop',lineno=instr.lineno))
+                new_bc.append(Instr('IMPORT_FROM','RepairloopRunner',lineno=instr.lineno))
+                new_bc.append(Instr('STORE_NAME','RepairloopRunner',lineno=instr.lineno))
+                new_bc.append(Instr('POP_TOP',lineno=instr.lineno))
+
+                new_bc.append(Instr('LOAD_NAME', 'print', lineno=cur_lineno+2))
+                new_bc.append(Instr('LOAD_NAME', 'RepairloopRunner', lineno=cur_lineno+2))
+                new_bc.append(Instr('CALL_FUNCTION', 1, lineno=cur_lineno+2))
+                new_bc.append(Instr('POP_TOP', lineno=cur_lineno+2))
+
+                # new_bc.append(Instr('LOAD_NAME','RepairloopRunner', lineno=cur_lineno+1))
+                # new_bc.append(Instr('CALL_FUNCTION',0, lineno=cur_lineno+1))
+                # new_bc.append(Instr('LOAD_METHOD','loop', lineno=cur_lineno+1))
+                # new_bc.append(Instr('LOAD_NAME','e', lineno=cur_lineno+1))
+                # new_bc.append(Instr('CALL_METHOD',1, lineno=cur_lineno+1))
                 new_bc.append(Instr('LOAD_NAME', 'print', lineno=cur_lineno+2)) # TODO: Call Develoop(fn, on_error=only_on_error, runner_class=interface)
                 new_bc.append(Instr('LOAD_NAME', 'e', lineno=cur_lineno+2))
                 new_bc.append(Instr('CALL_FUNCTION', 1, lineno=cur_lineno+2))
@@ -88,14 +104,6 @@ class Instrumenter:
             elif skip_insert:
                 skip_insert=False
             else:
-                # Import Develoop
-                if i==0:
-                    new_bc.append(Instr('LOAD_CONST',0,lineno=instr.lineno))
-                    new_bc.append(Instr('LOAD_CONST',('Develoop',),lineno=instr.lineno))
-                    new_bc.append(Instr('IMPORT_NAME','slipcover.jurigged.loop',lineno=instr.lineno))
-                    new_bc.append(Instr('IMPORT_FROM','Develoop',lineno=instr.lineno))
-                    new_bc.append(Instr('STORE_NAME','Develoop',lineno=instr.lineno))
-                    new_bc.append(Instr('POP_TOP',lineno=instr.lineno))
                 new_bc.append(instr)
                     
         new_bytecode=Bytecode(new_bc)

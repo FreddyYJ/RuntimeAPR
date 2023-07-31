@@ -8,6 +8,7 @@ from typing import Any
 from slipcover import Slipcover
 
 from .instrumenter import Instrumenter
+from .jurigged.loop import RepairloopRunner
 
 
 class RuntimeAPRLoader(Loader):
@@ -38,6 +39,7 @@ class RuntimeAPRLoader(Loader):
             code = self.orig_loader.get_code(module.__name__)
 
         code = self.sci.insert_try_except(code)
+        module.__dict__['RepairloopRunner']=RepairloopRunner
         exec(code, module.__dict__)
 
 class RuntimeAPRMetaPathFinder(MetaPathFinder):
@@ -155,6 +157,7 @@ def runtime_apr_wrap_pytest(sci: Instrumenter, file_matcher: RuntimeAPRFileMatch
     def exec_wrapper(obj, g):
         if hasattr(obj, 'co_filename') and file_matcher.matches(obj.co_filename):
             obj = sci.insert_try_except(obj)
+        g['RepairloopRunner']=RepairloopRunner
         exec(obj, g)
 
     try:

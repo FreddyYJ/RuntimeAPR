@@ -4,8 +4,9 @@ from pathlib import Path
 from typing import List, Tuple
 
 import slipcover as sc
+import sys
 
-filename='instrumentation/simple.py'
+filename=sys.argv[1]
 
 with open(filename, 'r') as f:
     t = ast.parse(f.read())
