@@ -10,7 +10,7 @@ class Instrumenter:
         delta=0
         skip_insert=False
         for i,instr in enumerate(bc):
-            if isinstance(instr,Instr) and instr.name=='CALL_FUNCTION':
+            if isinstance(instr,Instr) and (instr.name=='CALL_FUNCTION' or instr.name=='CALL_FUNCTION_KW'):
                 cur_lineno=instr.lineno
 
                 dummy_label=Label()  # Unmatch exceptions (Maybe dummy?)
