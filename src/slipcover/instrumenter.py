@@ -125,7 +125,7 @@ class Instrumenter:
         for i,instr in enumerate(bc):
             if self.skip_next_insert:
                 self.skip_next_insert=False
-            if isinstance(instr,Instr) and (instr.name=='CALL_FUNCTION' or instr.name=='CALL_FUNCTION_KW' or \
+            elif isinstance(instr,Instr) and (instr.name=='CALL_FUNCTION' or instr.name=='CALL_FUNCTION_KW' or \
                                             instr.name=='CALL_FUNCTION_EX' or instr.name=='CALL_METHOD'):
                 try_block,except_block=self.__generate_try_except(bc,i,instr)
                 new_bc+=try_block
