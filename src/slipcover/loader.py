@@ -8,7 +8,8 @@ from typing import Any
 from slipcover import Slipcover
 
 from .instrumenter import Instrumenter
-from .jurigged.loop import RepairloopRunner
+from . import bytecode as bc
+# from .jurigged.loop import RepairloopRunner
 
 
 class RuntimeAPRLoader(Loader):
@@ -38,8 +39,9 @@ class RuntimeAPRLoader(Loader):
         else:
             code = self.orig_loader.get_code(module.__name__)
 
-        code = self.sci.insert_try_except(code)
-        module.__dict__['RepairloopRunner']=RepairloopRunner
+        if '__runtime_apr__' not in code.co_consts:
+            code = self.sci.insert_try_except(code)
+        # module.__dict__['RepairloopRunner']=RepairloopRunner
         exec(code, module.__dict__)
 
 class RuntimeAPRMetaPathFinder(MetaPathFinder):
@@ -155,9 +157,10 @@ class RuntimeAPRImportManager:
 
 def runtime_apr_wrap_pytest(sci: Instrumenter, file_matcher: RuntimeAPRFileMatcher):
     def exec_wrapper(obj, g):
-        if hasattr(obj, 'co_filename') and file_matcher.matches(obj.co_filename):
+        if hasattr(obj, 'co_filename') and file_matcher.matches(obj.co_filename) and \
+                '__runtime_apr__' not in obj.co_consts:
             obj = sci.insert_try_except(obj)
-        g['RepairloopRunner']=RepairloopRunner
+        # g['RepairloopRunner']=RepairloopRunner
         exec(obj, g)
 
     try:
@@ -167,10 +170,11 @@ def runtime_apr_wrap_pytest(sci: Instrumenter, file_matcher: RuntimeAPRFileMatch
 
     for f in Slipcover.find_functions(pyrewrite.__dict__.values(), set()):
         if 'exec' in f.__code__.co_names:
-            # replaces={}
-            # replaces['co_consts']=list(f.__code__.co_consts).append(exec_wrapper)
-            # f.__code__=f.__code__.replace(**replaces)
-            f.__globals__['exec']=exec_wrapper
+            ed = bc.Editor(f.__code__)
+            wrapper_index = ed.add_const(exec_wrapper)
+            ed.replace_global_with_const('exec', wrapper_index)
+            f.__code__ = ed.finish()
+
 
     if False:
         import inspect

@@ -78,7 +78,7 @@ if args.omit:
 sci=Instrumenter()
 
 
-if not args.dont_wrap_pytest:
+if not args.dont_wrap_pytest and False:
     # sc.wrap_pytest(sci, file_matcher)
     runtime_apr_wrap_pytest(sci, file_matcher)
 
@@ -126,7 +126,8 @@ if args.script:
 
     # code = sci.instrument(code)
     code = sci.insert_try_except(code)
-    with sc.ImportManager(sci, file_matcher):
+    # with sc.ImportManager(sci, file_matcher):
+    with RuntimeAPRImportManager(sci, file_matcher):
         exec(code, script_globals)
 
 else:

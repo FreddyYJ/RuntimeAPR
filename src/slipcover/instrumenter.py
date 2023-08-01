@@ -4,13 +4,13 @@ from bytecode import Instr,Bytecode,Label,dump_bytecode
 class Instrumenter:
     def insert_try_except(self,code:CodeType):
         bc=Bytecode.from_code(code)
-        # print(code.co_filename)
+        print(code.co_firstlineno)
         # dump_bytecode(bc,lineno=True)
-        new_bc=[]
-        delta=0
+        new_bc=[Instr('LOAD_CONST','__runtime_apr__',lineno=1)]
         skip_insert=False
         for i,instr in enumerate(bc):
-            if isinstance(instr,Instr) and (instr.name=='CALL_FUNCTION' or instr.name=='CALL_FUNCTION_KW'):
+            if isinstance(instr,Instr) and (instr.name=='CALL_FUNCTION' or instr.name=='CALL_FUNCTION_KW' or \
+                                            instr.name=='CALL_FUNCTION_EX' or instr.name=='CALL_METHOD'):
                 cur_lineno=instr.lineno
 
                 dummy_label=Label()  # Unmatch exceptions (Maybe dummy?)
@@ -27,7 +27,6 @@ class Instrumenter:
                     else:
                         is_finished=True
                         remain_instrs.append(instr2)
-                delta=len(pop_tops)
 
                 # Create try
                 orig_label=Label()
@@ -53,17 +52,17 @@ class Instrumenter:
                 new_bc+=pop_tops    # Pop return values
 
                 new_bc.append(Instr('SETUP_FINALLY',except_exception_label, lineno=cur_lineno+1)) # Exception in except block
-                new_bc.append(Instr('LOAD_CONST',0,lineno=instr.lineno))
-                new_bc.append(Instr('LOAD_CONST',('RepairloopRunner',),lineno=instr.lineno))
-                new_bc.append(Instr('IMPORT_NAME','slipcover.jurigged.loop',lineno=instr.lineno))
-                new_bc.append(Instr('IMPORT_FROM','RepairloopRunner',lineno=instr.lineno))
-                new_bc.append(Instr('STORE_NAME','RepairloopRunner',lineno=instr.lineno))
-                new_bc.append(Instr('POP_TOP',lineno=instr.lineno))
+                # new_bc.append(Instr('LOAD_CONST',0,lineno=instr.lineno))
+                # new_bc.append(Instr('LOAD_CONST',('RepairloopRunner',),lineno=instr.lineno))
+                # new_bc.append(Instr('IMPORT_NAME','slipcover.jurigged.loop',lineno=instr.lineno))
+                # new_bc.append(Instr('IMPORT_FROM','RepairloopRunner',lineno=instr.lineno))
+                # new_bc.append(Instr('STORE_NAME','RepairloopRunner',lineno=instr.lineno))
+                # new_bc.append(Instr('POP_TOP',lineno=instr.lineno))
 
-                new_bc.append(Instr('LOAD_NAME', 'print', lineno=cur_lineno+2))
-                new_bc.append(Instr('LOAD_NAME', 'RepairloopRunner', lineno=cur_lineno+2))
-                new_bc.append(Instr('CALL_FUNCTION', 1, lineno=cur_lineno+2))
-                new_bc.append(Instr('POP_TOP', lineno=cur_lineno+2))
+                # new_bc.append(Instr('LOAD_NAME', 'print', lineno=cur_lineno+2))
+                # new_bc.append(Instr('LOAD_NAME', 'RepairloopRunner', lineno=cur_lineno+2))
+                # new_bc.append(Instr('CALL_FUNCTION', 1, lineno=cur_lineno+2))
+                # new_bc.append(Instr('POP_TOP', lineno=cur_lineno+2))
 
                 # new_bc.append(Instr('LOAD_NAME','RepairloopRunner', lineno=cur_lineno+1))
                 # new_bc.append(Instr('CALL_FUNCTION',0, lineno=cur_lineno+1))
@@ -99,13 +98,20 @@ class Instrumenter:
                 if not isinstance(remain_instrs[0],Instr) or remain_instrs[0].name!='JUMP_ABSOLUTE':
                     new_bc.append(orig_label)
 
-            elif delta>0:
-                delta-=1
             elif skip_insert:
                 skip_insert=False
+            elif isinstance(instr,Instr) and instr.name=='LOAD_CONST' and isinstance(instr.arg,CodeType) and \
+                        instr.arg.co_filename==code.co_filename and '__runtime_apr__' not in instr.arg.co_consts:
+                new_bc.append(Instr('LOAD_CONST',self.insert_try_except(instr.arg),lineno=instr.lineno))
             else:
                 new_bc.append(instr)
                     
         new_bytecode=Bytecode(new_bc)
-        # dump_bytecode(new_bytecode,lineno=True)
+        new_bytecode.freevars=list(code.co_freevars)
+        new_bytecode.cellvars=list(code.co_cellvars)
+        new_bytecode.name=code.co_name
+        new_bytecode.filename=code.co_filename
+        new_bytecode.first_lineno=code.co_firstlineno
+        new_bytecode._copy_attr_from(bc)
+        dump_bytecode(new_bytecode,lineno=True)
         return new_bytecode.to_code()
