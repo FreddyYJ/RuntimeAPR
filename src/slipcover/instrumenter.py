@@ -144,7 +144,8 @@ class Instrumenter:
 
     def insert_try_except(self,code:CodeType):
         bc=Bytecode.from_code(code)
-        if '__runtime_apr__' in code.co_consts:
+        # Skip if already instrumented
+        if isinstance(bc[0],Instr) and bc[0].name=='LOAD_CONST' and bc[0].arg=='__runtime_apr__':
             return code
         
         # print(code.co_firstlineno)
