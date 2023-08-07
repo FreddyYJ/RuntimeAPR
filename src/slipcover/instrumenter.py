@@ -7,7 +7,7 @@ class Instrumenter:
         self.skip_next_insert=False
         self.next_label=None
 
-    def __generate_try_except(self,orig_bc:Bytecode,index:int,instr:Instr,no_orig_label:bool=False,is_global_scope:bool=False):
+    def __generate_try_except__debug(self,orig_bc:Bytecode,index:int,instr:Instr,no_orig_label:bool=False,is_global_scope:bool=False):
         try_block=[]
         except_block=[]
         cur_lineno=instr.lineno
@@ -139,6 +139,139 @@ class Instrumenter:
             except_block.append(Instr('STORE_FAST','e', lineno=cur_lineno+137000))
             except_block.append(Instr('DELETE_FAST','e', lineno=cur_lineno+138000))
         except_block.append(Instr('RERAISE',0, lineno=cur_lineno+139000))
+        
+        return try_block,except_block
+
+
+    def __generate_try_except(self,orig_bc:Bytecode,index:int,instr:Instr,no_orig_label:bool=False,is_global_scope:bool=False):
+        try_block=[]
+        except_block=[]
+        cur_lineno=instr.lineno
+
+        dummy_label=Label()  # Unmatch exceptions (Maybe dummy?)
+        except_exception_label=Label()  # Exception in except block
+        except_label=Label()
+
+        # Find POP_TOPs after function call and remaining instructions
+        pop_tops=[]
+        remain_instrs=[]
+        is_finished=False
+        next_label=None
+        for instr2 in orig_bc[index+1:]:
+            if isinstance(instr2,Instr) and instr2.name=='POP_TOP' and not is_finished:
+                pop_tops.append(instr2)
+            elif isinstance(instr2,Label):
+                next_label=instr2
+                break
+            else:
+                is_finished=True
+                remain_instrs.append(instr2)
+        # Create try
+        orig_label=Label()
+        try_block.append(Instr('SETUP_FINALLY',except_label, lineno=cur_lineno))
+        instr.lineno=cur_lineno
+        try_block.append(instr)  # CALL_FUNCTION
+        try_block+=pop_tops    # POP_TOPs
+        try_block.append(Instr('POP_BLOCK', lineno=cur_lineno))  # Pop try block
+        if len(remain_instrs)==0:
+            self.next_label=next_label
+            try_block.append(Instr('JUMP_ABSOLUTE', self.next_label, lineno=cur_lineno))
+        elif len(remain_instrs)==1 and isinstance(remain_instrs[0],Instr) and (remain_instrs[0].name=='CALL_FUNCTION' or \
+                                                        remain_instrs[0].name=='CALL_FUNCTION_KW' or \
+                                                        remain_instrs[0].name=='CALL_FUNCTION_EX' or \
+                                                        remain_instrs[0].name=='CALL_METHOD'):
+            _try_block,_except_block=self.__generate_try_except(orig_bc,index+1,remain_instrs[0],no_orig_label=True)
+            try_block+=_try_block
+            except_block+=_except_block
+            self.skip_next_insert=True
+        elif len(remain_instrs)==1 and isinstance(remain_instrs[0],Instr) and remain_instrs[0].name!='JUMP_ABSOLUTE':
+            try_block.append(remain_instrs[0])
+            self.next_label=next_label
+            self.skip_next_insert=True
+        elif len(remain_instrs)==1:
+            # Add Jump directly if next instr is Jump
+            try_block.append(remain_instrs[0])
+            self.next_label=None
+            self.skip_next_insert=True
+        else:
+            if len(pop_tops)>0:
+                self.delta=len(pop_tops)
+            try_block.append(Instr('JUMP_ABSOLUTE', orig_label, lineno=cur_lineno))
+
+        # Create remaining instructions
+        if len(remain_instrs)>1 and not no_orig_label:
+            try_block.append(orig_label)
+
+        # Except block
+        except_block.append(except_label)
+        except_block.append(Instr('DUP_TOP',lineno=cur_lineno))
+        except_block.append(Instr('LOAD_GLOBAL', 'Exception', lineno=cur_lineno))
+        except_block.append(Instr('JUMP_IF_NOT_EXC_MATCH',dummy_label, lineno=cur_lineno)) # Jump if current Exception is not Exception
+        except_block.append(Instr('POP_TOP', lineno=cur_lineno))
+        if is_global_scope:
+            except_block.append(Instr('STORE_NAME', 'e', lineno=cur_lineno))
+        else:
+            except_block.append(Instr('STORE_FAST', 'e', lineno=cur_lineno))
+        except_block.append(Instr('POP_TOP', lineno=cur_lineno))
+
+        except_block.append(Instr('SETUP_FINALLY',except_exception_label, lineno=cur_lineno)) # Exception in except block
+        except_block.append(Instr('RAISE_VARARGS', 0, lineno=cur_lineno))
+        except_block.append(Instr('LOAD_CONST',0,lineno=instr.lineno))
+        except_block.append(Instr('LOAD_CONST',('RepairloopRunner',),lineno=instr.lineno))
+        except_block.append(Instr('IMPORT_NAME','slipcover.jurigged.loop',lineno=instr.lineno))
+        except_block.append(Instr('IMPORT_FROM','RepairloopRunner',lineno=instr.lineno))
+        except_block.append(Instr('STORE_NAME','RepairloopRunner',lineno=instr.lineno))
+        except_block.append(Instr('POP_TOP',lineno=instr.lineno))
+
+        # except_block.append(Instr('LOAD_NAME', 'print', lineno=cur_lineno+118000))
+        # except_block.append(Instr('LOAD_NAME', 'RepairloopRunner', lineno=cur_lineno+119000))
+        # except_block.append(Instr('CALL_FUNCTION', 1, lineno=cur_lineno+120000))
+        # except_block.append(Instr('POP_TOP', lineno=cur_lineno+121000))
+
+        # except_block.append(Instr('LOAD_NAME','RepairloopRunner', lineno=cur_lineno+1000))
+        # except_block.append(Instr('CALL_FUNCTION',0, lineno=cur_lineno+1000))
+        # except_block.append(Instr('LOAD_METHOD','loop', lineno=cur_lineno+1000))
+        # except_block.append(Instr('LOAD_NAME','e', lineno=cur_lineno+1000))
+        # except_block.append(Instr('CALL_METHOD',1, lineno=cur_lineno+1000))
+
+        except_block.append(Instr('LOAD_GLOBAL', 'print', lineno=cur_lineno)) # TODO: Call Develoop(fn, on_error=only_on_error, runner_class=interface)
+        if is_global_scope:
+            except_block.append(Instr('LOAD_NAME', 'e', lineno=cur_lineno))
+        else:
+            except_block.append(Instr('LOAD_FAST', 'e', lineno=cur_lineno))
+        except_block.append(Instr('CALL_FUNCTION', 1, lineno=cur_lineno))
+        except_block.append(Instr('POP_TOP', lineno=cur_lineno)) # Pop except block
+        except_block.append(Instr('POP_BLOCK', lineno=cur_lineno)) # Pop except block
+        except_block.append(Instr('POP_EXCEPT', lineno=cur_lineno)) # Pop current Exception
+
+        except_block.append(Instr('LOAD_CONST', None, lineno=cur_lineno))
+        except_block.append(Instr('STORE_FAST', 'e', lineno=cur_lineno))
+        except_block.append(Instr('DELETE_FAST', 'e', lineno=cur_lineno))
+
+        if len(remain_instrs)==0 and self.next_label is not None:
+            except_block.append(Instr('JUMP_ABSOLUTE', self.next_label, lineno=cur_lineno))
+            self.next_label=None
+        elif len(remain_instrs)==1:
+            if remain_instrs[0].name!='JUMP_ABSOLUTE' and self.next_label is not None:
+                except_block.append(Instr('JUMP_ABSOLUTE', self.next_label, lineno=cur_lineno))
+                self.next_label=None
+            else:
+                except_block.append(remain_instrs[0])
+        else:
+            except_block.append(Instr('JUMP_ABSOLUTE', orig_label, lineno=cur_lineno))
+
+        # Create dummy and except_exception block
+        except_block.append(dummy_label)  # Not handled exceptions
+        except_block.append(Instr('RERAISE',1, lineno=cur_lineno))
+        except_block.append(except_exception_label)  # Exception in except block
+        except_block.append(Instr('LOAD_CONST',None, lineno=cur_lineno))
+        if is_global_scope:
+            except_block.append(Instr('STORE_NAME','e', lineno=cur_lineno))
+            except_block.append(Instr('DELETE_NAME','e', lineno=cur_lineno))
+        else:
+            except_block.append(Instr('STORE_FAST','e', lineno=cur_lineno))
+            except_block.append(Instr('DELETE_FAST','e', lineno=cur_lineno))
+        except_block.append(Instr('RERAISE',0, lineno=cur_lineno))
         
         return try_block,except_block
 
