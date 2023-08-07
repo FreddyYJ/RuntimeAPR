@@ -105,6 +105,7 @@ if not args.silent and False:
 
 
 if args.script:
+    sci.is_script_mode=True
     # python 'globals' for the script being executed
     script_globals: Dict[Any, Any] = dict()
 

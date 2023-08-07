@@ -2,12 +2,13 @@ from types import CodeType
 from bytecode import Instr,Bytecode,Label,dump_bytecode
 
 class Instrumenter:
-    def __init__(self):
+    def __init__(self,is_script_mode:bool=False):
         self.delta=0
         self.skip_next_insert=False
         self.next_label=None
+        self.is_script_mode=is_script_mode
 
-    def __generate_try_except__debug(self,orig_bc:Bytecode,index:int,instr:Instr,no_orig_label:bool=False,is_global_scope:bool=False):
+    def __generate_try_except__debug(self,orig_bc:Bytecode,index:int,instr:Instr,no_orig_label:bool=False):
         try_block=[]
         except_block=[]
         cur_lineno=instr.lineno
@@ -75,7 +76,7 @@ class Instrumenter:
         except_block.append(Instr('LOAD_GLOBAL', 'Exception', lineno=cur_lineno+140000))
         except_block.append(Instr('JUMP_IF_NOT_EXC_MATCH',dummy_label, lineno=cur_lineno+150000)) # Jump if current Exception is not Exception
         except_block.append(Instr('POP_TOP', lineno=cur_lineno+160000))
-        if is_global_scope:
+        if self.is_script_mode:
             except_block.append(Instr('STORE_NAME', 'e', lineno=cur_lineno+170000))
         else:
             except_block.append(Instr('STORE_FAST', 'e', lineno=cur_lineno+170000))
@@ -102,7 +103,7 @@ class Instrumenter:
         # except_block.append(Instr('CALL_METHOD',1, lineno=cur_lineno+1000))
 
         except_block.append(Instr('LOAD_GLOBAL', 'print', lineno=cur_lineno+122000)) # TODO: Call Develoop(fn, on_error=only_on_error, runner_class=interface)
-        if is_global_scope:
+        if self.is_script_mode:
             except_block.append(Instr('LOAD_NAME', 'e', lineno=cur_lineno+123000))
         else:
             except_block.append(Instr('LOAD_FAST', 'e', lineno=cur_lineno+123000))
@@ -132,7 +133,7 @@ class Instrumenter:
         except_block.append(Instr('RERAISE',1, lineno=cur_lineno+135000))
         except_block.append(except_exception_label)  # Exception in except block
         except_block.append(Instr('LOAD_CONST',None, lineno=cur_lineno+136000))
-        if is_global_scope:
+        if self.is_script_mode:
             except_block.append(Instr('STORE_NAME','e', lineno=cur_lineno+137000))
             except_block.append(Instr('DELETE_NAME','e', lineno=cur_lineno+138000))
         else:
@@ -143,7 +144,7 @@ class Instrumenter:
         return try_block,except_block
 
 
-    def __generate_try_except(self,orig_bc:Bytecode,index:int,instr:Instr,no_orig_label:bool=False,is_global_scope:bool=False):
+    def __generate_try_except(self,orig_bc:Bytecode,index:int,instr:Instr,no_orig_label:bool=False):
         try_block=[]
         except_block=[]
         cur_lineno=instr.lineno
@@ -208,14 +209,13 @@ class Instrumenter:
         except_block.append(Instr('LOAD_GLOBAL', 'Exception', lineno=cur_lineno))
         except_block.append(Instr('JUMP_IF_NOT_EXC_MATCH',dummy_label, lineno=cur_lineno)) # Jump if current Exception is not Exception
         except_block.append(Instr('POP_TOP', lineno=cur_lineno))
-        if is_global_scope:
+        if self.is_script_mode:
             except_block.append(Instr('STORE_NAME', 'e', lineno=cur_lineno))
         else:
             except_block.append(Instr('STORE_FAST', 'e', lineno=cur_lineno))
         except_block.append(Instr('POP_TOP', lineno=cur_lineno))
 
         except_block.append(Instr('SETUP_FINALLY',except_exception_label, lineno=cur_lineno)) # Exception in except block
-        except_block.append(Instr('RAISE_VARARGS', 0, lineno=cur_lineno))
         except_block.append(Instr('LOAD_CONST',0,lineno=instr.lineno))
         except_block.append(Instr('LOAD_CONST',('RepairloopRunner',),lineno=instr.lineno))
         except_block.append(Instr('IMPORT_NAME','slipcover.jurigged.loop',lineno=instr.lineno))
@@ -223,10 +223,10 @@ class Instrumenter:
         except_block.append(Instr('STORE_NAME','RepairloopRunner',lineno=instr.lineno))
         except_block.append(Instr('POP_TOP',lineno=instr.lineno))
 
-        # except_block.append(Instr('LOAD_NAME', 'print', lineno=cur_lineno+118000))
-        # except_block.append(Instr('LOAD_NAME', 'RepairloopRunner', lineno=cur_lineno+119000))
-        # except_block.append(Instr('CALL_FUNCTION', 1, lineno=cur_lineno+120000))
-        # except_block.append(Instr('POP_TOP', lineno=cur_lineno+121000))
+        except_block.append(Instr('LOAD_NAME', 'print', lineno=cur_lineno))
+        except_block.append(Instr('LOAD_NAME', 'RepairloopRunner', lineno=cur_lineno))
+        except_block.append(Instr('CALL_FUNCTION', 1, lineno=cur_lineno))
+        except_block.append(Instr('POP_TOP', lineno=cur_lineno))
 
         # except_block.append(Instr('LOAD_NAME','RepairloopRunner', lineno=cur_lineno+1000))
         # except_block.append(Instr('CALL_FUNCTION',0, lineno=cur_lineno+1000))
@@ -235,18 +235,23 @@ class Instrumenter:
         # except_block.append(Instr('CALL_METHOD',1, lineno=cur_lineno+1000))
 
         except_block.append(Instr('LOAD_GLOBAL', 'print', lineno=cur_lineno)) # TODO: Call Develoop(fn, on_error=only_on_error, runner_class=interface)
-        if is_global_scope:
+        if self.is_script_mode:
             except_block.append(Instr('LOAD_NAME', 'e', lineno=cur_lineno))
         else:
             except_block.append(Instr('LOAD_FAST', 'e', lineno=cur_lineno))
         except_block.append(Instr('CALL_FUNCTION', 1, lineno=cur_lineno))
         except_block.append(Instr('POP_TOP', lineno=cur_lineno)) # Pop except block
+        except_block.append(Instr('RAISE_VARARGS', 0, lineno=cur_lineno)) # TODO: Remove this after experiments
         except_block.append(Instr('POP_BLOCK', lineno=cur_lineno)) # Pop except block
         except_block.append(Instr('POP_EXCEPT', lineno=cur_lineno)) # Pop current Exception
 
         except_block.append(Instr('LOAD_CONST', None, lineno=cur_lineno))
-        except_block.append(Instr('STORE_FAST', 'e', lineno=cur_lineno))
-        except_block.append(Instr('DELETE_FAST', 'e', lineno=cur_lineno))
+        if self.is_script_mode:
+            except_block.append(Instr('STORE_NAME', 'e', lineno=cur_lineno))
+            except_block.append(Instr('DELETE_NAME', 'e', lineno=cur_lineno))
+        else:
+            except_block.append(Instr('STORE_FAST', 'e', lineno=cur_lineno))
+            except_block.append(Instr('DELETE_FAST', 'e', lineno=cur_lineno))
 
         if len(remain_instrs)==0 and self.next_label is not None:
             except_block.append(Instr('JUMP_ABSOLUTE', self.next_label, lineno=cur_lineno))
@@ -265,7 +270,7 @@ class Instrumenter:
         except_block.append(Instr('RERAISE',1, lineno=cur_lineno))
         except_block.append(except_exception_label)  # Exception in except block
         except_block.append(Instr('LOAD_CONST',None, lineno=cur_lineno))
-        if is_global_scope:
+        if self.is_script_mode:
             except_block.append(Instr('STORE_NAME','e', lineno=cur_lineno))
             except_block.append(Instr('DELETE_NAME','e', lineno=cur_lineno))
         else:
@@ -292,7 +297,7 @@ class Instrumenter:
                 self.skip_next_insert=False
             elif isinstance(instr,Instr) and (instr.name=='CALL_FUNCTION' or instr.name=='CALL_FUNCTION_KW' or \
                                             instr.name=='CALL_FUNCTION_EX' or instr.name=='CALL_METHOD'):
-                try_block,except_block=self.__generate_try_except(bc,i,instr,is_global_scope=False)
+                try_block,except_block=self.__generate_try_except(bc,i,instr)
                 new_bc+=try_block
                 except_bc+=except_block
             elif self.delta>0:
