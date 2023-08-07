@@ -83,7 +83,6 @@ class Instrumenter:
         except_block.append(Instr('POP_TOP', lineno=cur_lineno+180000))
 
         except_block.append(Instr('SETUP_FINALLY',except_exception_label, lineno=cur_lineno+190000)) # Exception in except block
-        except_block.append(Instr('RAISE_VARARGS', 0, lineno=cur_lineno+131000))
         except_block.append(Instr('LOAD_CONST',0,lineno=instr.lineno+112000))
         except_block.append(Instr('LOAD_CONST',('RepairloopRunner',),lineno=instr.lineno+113000))
         except_block.append(Instr('IMPORT_NAME','slipcover.jurigged.loop',lineno=instr.lineno+114000))
@@ -91,10 +90,10 @@ class Instrumenter:
         except_block.append(Instr('STORE_NAME','RepairloopRunner',lineno=instr.lineno+116000))
         except_block.append(Instr('POP_TOP',lineno=instr.lineno+117000))
 
-        # except_block.append(Instr('LOAD_NAME', 'print', lineno=cur_lineno+118000))
-        # except_block.append(Instr('LOAD_NAME', 'RepairloopRunner', lineno=cur_lineno+119000))
-        # except_block.append(Instr('CALL_FUNCTION', 1, lineno=cur_lineno+120000))
-        # except_block.append(Instr('POP_TOP', lineno=cur_lineno+121000))
+        except_block.append(Instr('LOAD_NAME', 'print', lineno=cur_lineno+118000))
+        except_block.append(Instr('LOAD_NAME', 'RepairloopRunner', lineno=cur_lineno+119000))
+        except_block.append(Instr('CALL_FUNCTION', 1, lineno=cur_lineno+120000))
+        except_block.append(Instr('POP_TOP', lineno=cur_lineno+121000))
 
         # except_block.append(Instr('LOAD_NAME','RepairloopRunner', lineno=cur_lineno+1000))
         # except_block.append(Instr('CALL_FUNCTION',0, lineno=cur_lineno+1000))
@@ -109,12 +108,17 @@ class Instrumenter:
             except_block.append(Instr('LOAD_FAST', 'e', lineno=cur_lineno+123000))
         except_block.append(Instr('CALL_FUNCTION', 1, lineno=cur_lineno+124000))
         except_block.append(Instr('POP_TOP', lineno=cur_lineno+127000)) # Pop except block
+        except_block.append(Instr('RAISE_VARARGS', 0, lineno=cur_lineno+131000))
         except_block.append(Instr('POP_BLOCK', lineno=cur_lineno+127000)) # Pop except block
         except_block.append(Instr('POP_EXCEPT', lineno=cur_lineno+128000)) # Pop current Exception
 
         except_block.append(Instr('LOAD_CONST', None, lineno=cur_lineno+129000))
-        except_block.append(Instr('STORE_FAST', 'e', lineno=cur_lineno+130000))
-        except_block.append(Instr('DELETE_FAST', 'e', lineno=cur_lineno+131000))
+        if self.is_script_mode:
+            except_block.append(Instr('STORE_NAME', 'e', lineno=cur_lineno+130000))
+            except_block.append(Instr('DELETE_NAME', 'e', lineno=cur_lineno+131000))
+        else:
+            except_block.append(Instr('STORE_FAST', 'e', lineno=cur_lineno+130000))
+            except_block.append(Instr('DELETE_FAST', 'e', lineno=cur_lineno+131000))
 
         if len(remain_instrs)==0 and self.next_label is not None:
             except_block.append(Instr('JUMP_ABSOLUTE', self.next_label, lineno=cur_lineno+132000))
@@ -170,7 +174,6 @@ class Instrumenter:
         # Create try
         orig_label=Label()
         try_block.append(Instr('SETUP_FINALLY',except_label, lineno=cur_lineno))
-        instr.lineno=cur_lineno
         try_block.append(instr)  # CALL_FUNCTION
         try_block+=pop_tops    # POP_TOPs
         try_block.append(Instr('POP_BLOCK', lineno=cur_lineno))  # Pop try block
