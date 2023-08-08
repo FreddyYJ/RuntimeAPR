@@ -1,12 +1,14 @@
 import inspect
 import pickle
 import sys
-from types import FrameType, FunctionType
-from typing import Any, Dict, List, Set, Tuple
+from types import FrameType, FunctionType, MethodType
+from typing import Any, Dict, List, Set, Tuple, Union
 import ast
 
 import z3
+from bytecode import Bytecode
 
+from .funcast import FunctionFinderVisitor
 from .repairutils import BugInformation,prune_default_global_var,is_default_global
 from .develoop import RedirectDeveloopRunner
 from ..concolic import ConcolicTracer,get_zvalue,zint,symbolize,ControlDependenceGraph,Block,ConditionTree,ConditionNode
@@ -268,3 +270,85 @@ class RepairloopRunner(RedirectDeveloopRunner):
             print(f'Different result!')
 
         return is_same
+    
+def except_handler(e:Exception):
+    innerframes=inspect.getinnerframes(e.__traceback__)
+    info:inspect.FrameInfo=innerframes[0]
+    inner_info:inspect.FrameInfo=innerframes[1]
+    f=info.frame
+    
+    locals=f.f_locals.copy()
+    globals=f.f_globals.copy()
+    func:Union[FunctionType,MethodType]=None
+    for k,v in locals.items():
+        if (isinstance(v,FunctionType) or isinstance(v,MethodType)) and k==inner_info.function:
+            func=v
+            break
+
+    if func is None:
+        for k,v in globals.items():
+            if (isinstance(v,FunctionType) or isinstance(v,MethodType)) and k==inner_info.function:
+                func=v
+                break
+    
+    assert func is not None
+
+    with open(inner_info.filename,'r') as file:
+        func_ast=ast.parse(file.read(),inner_info.filename,'exec')
+    visitor=FunctionFinderVisitor(inner_info.lineno)
+    visitor.visit(func_ast)
+    target_func=visitor.get_funcs()
+    args=target_func.args
+    # print(args.args[0].arg)
+    # print(args.posonlyargs)
+    # print(args.kwonlyargs[0].arg)
+    # print(args.vararg.arg)
+
+    pos_args=[]
+    for arg in args.posonlyargs:
+        pos_args.append(arg.arg)
+    norm_args=[]
+    for arg in args.args:
+        norm_args.append(arg.arg)
+    var_arg=args.vararg.arg if args.vararg else None
+    kwonly_args=[]
+    for arg in args.kwonlyargs:
+        kwonly_args.append(arg.arg)
+    kw_arg=args.kwarg.arg if args.kwarg else None
+    # func(pos_args, /, norm_args, *var_arg | *, kwonly_args, **kw_arg)
+    
+    bc=Bytecode.from_code(inner_info.frame.f_code)
+    arg_names=bc.argnames
+    # print(arg_names)
+    # print(inner_info.frame.f_locals)
+    pos_only=[]
+    for arg in pos_args:
+        if arg in inner_info.frame.f_locals:
+            pos_only.append(inner_info.frame.f_locals[arg])
+    norms=[]
+    for arg in norm_args:
+        if arg in inner_info.frame.f_locals:
+            norms.append(inner_info.frame.f_locals[arg])
+    vargs=[]
+    if var_arg and var_arg in inner_info.frame.f_locals:
+        assert isinstance(inner_info.frame.f_locals[var_arg],tuple)
+        for element in inner_info.frame.f_locals[var_arg]:
+            vargs.append(element)
+    kwonlys={}
+    for arg in kwonly_args:
+        if arg in inner_info.frame.f_locals:
+            kwonlys[arg]=inner_info.frame.f_locals[arg]
+    kws={}
+    if kw_arg and kw_arg in inner_info.frame.f_locals:
+        assert isinstance(inner_info.frame.f_locals[kw_arg],dict)
+        for k,v in inner_info.frame.f_locals[kw_arg].items():
+            kws[k]=v
+    kwonlys.update(kws)
+
+    print(f'Args: {pos_only+norms+vargs}')
+    print(f'Kwargs: {kwonlys}')
+    func(*(pos_only+norms+vargs),**kwonlys)
+    bug_info=BugInformation(inner_info.lineno,inner_info.function,
+                            inner_info.frame.f_locals,inner_info.frame.f_globals)
+    runner=RepairloopRunner(func,(pos_only+norms+vargs),kwonlys,bug_info)
+    return runner.loop(e)
