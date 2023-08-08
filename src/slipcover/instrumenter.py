@@ -48,7 +48,7 @@ class Instrumenter:
                                                         remain_instrs[0].name=='CALL_FUNCTION_KW' or \
                                                         remain_instrs[0].name=='CALL_FUNCTION_EX' or \
                                                         remain_instrs[0].name=='CALL_METHOD'):
-            _try_block,_except_block=self.__generate_try_except(orig_bc,index+1,remain_instrs[0],no_orig_label=True)
+            _try_block,_except_block=self.__generate_try_except__debug(orig_bc,index+1,remain_instrs[0],no_orig_label=True)
             try_block+=_try_block
             except_block+=_except_block
             self.skip_next_insert=True
@@ -87,11 +87,20 @@ class Instrumenter:
         except_block.append(Instr('LOAD_CONST',('RepairloopRunner',),lineno=instr.lineno+113000))
         except_block.append(Instr('IMPORT_NAME','slipcover.jurigged.loop',lineno=instr.lineno+114000))
         except_block.append(Instr('IMPORT_FROM','RepairloopRunner',lineno=instr.lineno+115000))
-        except_block.append(Instr('STORE_NAME','RepairloopRunner',lineno=instr.lineno+116000))
+        if self.is_script_mode:
+            except_block.append(Instr('STORE_NAME','RepairloopRunner',lineno=instr.lineno+116000))
+        else:
+            except_block.append(Instr('STORE_FAST','RepairloopRunner',lineno=instr.lineno+116000))
         except_block.append(Instr('POP_TOP',lineno=instr.lineno+117000))
 
-        except_block.append(Instr('LOAD_NAME', 'print', lineno=cur_lineno+118000))
-        except_block.append(Instr('LOAD_NAME', 'RepairloopRunner', lineno=cur_lineno+119000))
+        if self.is_script_mode:
+            except_block.append(Instr('LOAD_NAME', 'print', lineno=cur_lineno+118000))
+        else:
+            except_block.append(Instr('LOAD_GLOBAL', 'print', lineno=cur_lineno+118000))
+        if self.is_script_mode:
+            except_block.append(Instr('LOAD_NAME', 'RepairloopRunner', lineno=cur_lineno+119000))
+        else:
+            except_block.append(Instr('LOAD_FAST', 'RepairloopRunner', lineno=cur_lineno+119000))
         except_block.append(Instr('CALL_FUNCTION', 1, lineno=cur_lineno+120000))
         except_block.append(Instr('POP_TOP', lineno=cur_lineno+121000))
 
@@ -101,7 +110,10 @@ class Instrumenter:
         # except_block.append(Instr('LOAD_NAME','e', lineno=cur_lineno+1000))
         # except_block.append(Instr('CALL_METHOD',1, lineno=cur_lineno+1000))
 
-        except_block.append(Instr('LOAD_GLOBAL', 'print', lineno=cur_lineno+122000)) # TODO: Call Develoop(fn, on_error=only_on_error, runner_class=interface)
+        if self.is_script_mode:
+            except_block.append(Instr('LOAD_NAME', 'print', lineno=cur_lineno+121000))
+        else:
+            except_block.append(Instr('LOAD_GLOBAL', 'print', lineno=cur_lineno+122000)) # TODO: Call Develoop(fn, on_error=only_on_error, runner_class=interface)
         if self.is_script_mode:
             except_block.append(Instr('LOAD_NAME', 'e', lineno=cur_lineno+123000))
         else:
@@ -223,11 +235,20 @@ class Instrumenter:
         except_block.append(Instr('LOAD_CONST',('RepairloopRunner',),lineno=instr.lineno))
         except_block.append(Instr('IMPORT_NAME','slipcover.jurigged.loop',lineno=instr.lineno))
         except_block.append(Instr('IMPORT_FROM','RepairloopRunner',lineno=instr.lineno))
-        except_block.append(Instr('STORE_NAME','RepairloopRunner',lineno=instr.lineno))
+        if self.is_script_mode:
+            except_block.append(Instr('STORE_NAME', 'RepairloopRunner', lineno=cur_lineno))
+        else:
+            except_block.append(Instr('STORE_FAST', 'RepairloopRunner', lineno=cur_lineno))
         except_block.append(Instr('POP_TOP',lineno=instr.lineno))
 
-        except_block.append(Instr('LOAD_NAME', 'print', lineno=cur_lineno))
-        except_block.append(Instr('LOAD_NAME', 'RepairloopRunner', lineno=cur_lineno))
+        if self.is_script_mode:
+            except_block.append(Instr('LOAD_NAME', 'print', lineno=cur_lineno))
+        else:
+            except_block.append(Instr('LOAD_GLOBAL', 'print', lineno=cur_lineno))
+        if self.is_script_mode:
+            except_block.append(Instr('LOAD_NAME', 'RepairloopRunner', lineno=cur_lineno))
+        else:
+            except_block.append(Instr('LOAD_FAST', 'RepairloopRunner', lineno=cur_lineno))
         except_block.append(Instr('CALL_FUNCTION', 1, lineno=cur_lineno))
         except_block.append(Instr('POP_TOP', lineno=cur_lineno))
 
@@ -237,7 +258,10 @@ class Instrumenter:
         # except_block.append(Instr('LOAD_NAME','e', lineno=cur_lineno+1000))
         # except_block.append(Instr('CALL_METHOD',1, lineno=cur_lineno+1000))
 
-        except_block.append(Instr('LOAD_GLOBAL', 'print', lineno=cur_lineno)) # TODO: Call Develoop(fn, on_error=only_on_error, runner_class=interface)
+        if self.is_script_mode:
+            except_block.append(Instr('LOAD_NAME', 'print', lineno=cur_lineno))
+        else:
+            except_block.append(Instr('LOAD_GLOBAL', 'print', lineno=cur_lineno))# TODO: Call Develoop(fn, on_error=only_on_error, runner_class=interface)
         if self.is_script_mode:
             except_block.append(Instr('LOAD_NAME', 'e', lineno=cur_lineno))
         else:

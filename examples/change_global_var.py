@@ -15,9 +15,9 @@ def inc(b):
     return a,b
 
 for _ in range(5):
-    # try:
+    try:
         inc(a)
-    # except Exception as e:
-    #     from slipcover.jurigged.loop import RepairloopRunner
-    #     print(RepairloopRunner)
-    #     print(e)
+    except Exception as e:
+        import inspect
+        info:inspect.FrameInfo=inspect.getinnerframes(e.__traceback__)[1]
+        f=info.frame
