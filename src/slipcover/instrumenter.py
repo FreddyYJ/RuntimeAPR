@@ -77,9 +77,9 @@ class Instrumenter:
         except_block.append(Instr('JUMP_IF_NOT_EXC_MATCH',dummy_label, lineno=cur_lineno+150000)) # Jump if current Exception is not Exception
         except_block.append(Instr('POP_TOP', lineno=cur_lineno+160000))
         if self.is_script_mode:
-            except_block.append(Instr('STORE_NAME', 'e', lineno=cur_lineno+170000))
+            except_block.append(Instr('STORE_NAME', '_sc_e', lineno=cur_lineno+170000))
         else:
-            except_block.append(Instr('STORE_FAST', 'e', lineno=cur_lineno+170000))
+            except_block.append(Instr('STORE_FAST', '_sc_e', lineno=cur_lineno+170000))
         except_block.append(Instr('POP_TOP', lineno=cur_lineno+180000))
 
         except_block.append(Instr('SETUP_FINALLY',except_exception_label, lineno=cur_lineno+190000)) # Exception in except block
@@ -107,7 +107,7 @@ class Instrumenter:
         # except_block.append(Instr('LOAD_NAME','RepairloopRunner', lineno=cur_lineno+1000))
         # except_block.append(Instr('CALL_FUNCTION',0, lineno=cur_lineno+1000))
         # except_block.append(Instr('LOAD_METHOD','loop', lineno=cur_lineno+1000))
-        # except_block.append(Instr('LOAD_NAME','e', lineno=cur_lineno+1000))
+        # except_block.append(Instr('LOAD_NAME','_sc_e', lineno=cur_lineno+1000))
         # except_block.append(Instr('CALL_METHOD',1, lineno=cur_lineno+1000))
 
         if self.is_script_mode:
@@ -115,9 +115,9 @@ class Instrumenter:
         else:
             except_block.append(Instr('LOAD_GLOBAL', 'print', lineno=cur_lineno+122000)) # TODO: Call Develoop(fn, on_error=only_on_error, runner_class=interface)
         if self.is_script_mode:
-            except_block.append(Instr('LOAD_NAME', 'e', lineno=cur_lineno+123000))
+            except_block.append(Instr('LOAD_NAME', '_sc_e', lineno=cur_lineno+123000))
         else:
-            except_block.append(Instr('LOAD_FAST', 'e', lineno=cur_lineno+123000))
+            except_block.append(Instr('LOAD_FAST', '_sc_e', lineno=cur_lineno+123000))
         except_block.append(Instr('CALL_FUNCTION', 1, lineno=cur_lineno+124000))
         except_block.append(Instr('POP_TOP', lineno=cur_lineno+127000)) # Pop except block
         except_block.append(Instr('RAISE_VARARGS', 0, lineno=cur_lineno+131000))
@@ -126,11 +126,11 @@ class Instrumenter:
 
         except_block.append(Instr('LOAD_CONST', None, lineno=cur_lineno+129000))
         if self.is_script_mode:
-            except_block.append(Instr('STORE_NAME', 'e', lineno=cur_lineno+130000))
-            except_block.append(Instr('DELETE_NAME', 'e', lineno=cur_lineno+131000))
+            except_block.append(Instr('STORE_NAME', '_sc_e', lineno=cur_lineno+130000))
+            except_block.append(Instr('DELETE_NAME', '_sc_e', lineno=cur_lineno+131000))
         else:
-            except_block.append(Instr('STORE_FAST', 'e', lineno=cur_lineno+130000))
-            except_block.append(Instr('DELETE_FAST', 'e', lineno=cur_lineno+131000))
+            except_block.append(Instr('STORE_FAST', '_sc_e', lineno=cur_lineno+130000))
+            except_block.append(Instr('DELETE_FAST', '_sc_e', lineno=cur_lineno+131000))
 
         if len(remain_instrs)==0 and self.next_label is not None:
             except_block.append(Instr('JUMP_ABSOLUTE', self.next_label, lineno=cur_lineno+132000))
@@ -150,11 +150,11 @@ class Instrumenter:
         except_block.append(except_exception_label)  # Exception in except block
         except_block.append(Instr('LOAD_CONST',None, lineno=cur_lineno+136000))
         if self.is_script_mode:
-            except_block.append(Instr('STORE_NAME','e', lineno=cur_lineno+137000))
-            except_block.append(Instr('DELETE_NAME','e', lineno=cur_lineno+138000))
+            except_block.append(Instr('STORE_NAME','_sc_e', lineno=cur_lineno+137000))
+            except_block.append(Instr('DELETE_NAME','_sc_e', lineno=cur_lineno+138000))
         else:
-            except_block.append(Instr('STORE_FAST','e', lineno=cur_lineno+137000))
-            except_block.append(Instr('DELETE_FAST','e', lineno=cur_lineno+138000))
+            except_block.append(Instr('STORE_FAST','_sc_e', lineno=cur_lineno+137000))
+            except_block.append(Instr('DELETE_FAST','_sc_e', lineno=cur_lineno+138000))
         except_block.append(Instr('RERAISE',0, lineno=cur_lineno+139000))
         
         return try_block,except_block
@@ -225,60 +225,65 @@ class Instrumenter:
         except_block.append(Instr('JUMP_IF_NOT_EXC_MATCH',dummy_label, lineno=cur_lineno)) # Jump if current Exception is not Exception
         except_block.append(Instr('POP_TOP', lineno=cur_lineno))
         if self.is_script_mode:
-            except_block.append(Instr('STORE_NAME', 'e', lineno=cur_lineno))
+            except_block.append(Instr('STORE_NAME', '_sc_e', lineno=cur_lineno))
         else:
-            except_block.append(Instr('STORE_FAST', 'e', lineno=cur_lineno))
+            except_block.append(Instr('STORE_FAST', '_sc_e', lineno=cur_lineno))
         except_block.append(Instr('POP_TOP', lineno=cur_lineno))
 
         except_block.append(Instr('SETUP_FINALLY',except_exception_label, lineno=cur_lineno)) # Exception in except block
         except_block.append(Instr('LOAD_CONST',0,lineno=instr.lineno))
-        except_block.append(Instr('LOAD_CONST',('RepairloopRunner',),lineno=instr.lineno))
+        except_block.append(Instr('LOAD_CONST',('except_handler',),lineno=instr.lineno))
         except_block.append(Instr('IMPORT_NAME','slipcover.jurigged.loop',lineno=instr.lineno))
-        except_block.append(Instr('IMPORT_FROM','RepairloopRunner',lineno=instr.lineno))
+        except_block.append(Instr('IMPORT_FROM','except_handler',lineno=instr.lineno))
         if self.is_script_mode:
-            except_block.append(Instr('STORE_NAME', 'RepairloopRunner', lineno=cur_lineno))
+            except_block.append(Instr('STORE_NAME', 'except_handler', lineno=cur_lineno))
         else:
-            except_block.append(Instr('STORE_FAST', 'RepairloopRunner', lineno=cur_lineno))
+            except_block.append(Instr('STORE_FAST', 'except_handler', lineno=cur_lineno))
         except_block.append(Instr('POP_TOP',lineno=instr.lineno))
 
+        # if self.is_script_mode:
+        #     except_block.append(Instr('LOAD_NAME', 'print', lineno=cur_lineno))
+        # else:
+        #     except_block.append(Instr('LOAD_GLOBAL', 'print', lineno=cur_lineno))
+        # if self.is_script_mode:
+        #     except_block.append(Instr('LOAD_NAME', 'RepairloopRunner', lineno=cur_lineno))
+        # else:
+        #     except_block.append(Instr('LOAD_FAST', 'RepairloopRunner', lineno=cur_lineno))
+        # except_block.append(Instr('CALL_FUNCTION', 1, lineno=cur_lineno))
+        # except_block.append(Instr('POP_TOP', lineno=cur_lineno))
+
         if self.is_script_mode:
-            except_block.append(Instr('LOAD_NAME', 'print', lineno=cur_lineno))
+            except_block.append(Instr('LOAD_NAME','except_handler', lineno=cur_lineno))
         else:
-            except_block.append(Instr('LOAD_GLOBAL', 'print', lineno=cur_lineno))
+            except_block.append(Instr('LOAD_FAST','except_handler', lineno=cur_lineno))
         if self.is_script_mode:
-            except_block.append(Instr('LOAD_NAME', 'RepairloopRunner', lineno=cur_lineno))
+            except_block.append(Instr('LOAD_NAME', '_sc_e', lineno=cur_lineno))
         else:
-            except_block.append(Instr('LOAD_FAST', 'RepairloopRunner', lineno=cur_lineno))
-        except_block.append(Instr('CALL_FUNCTION', 1, lineno=cur_lineno))
+            except_block.append(Instr('LOAD_FAST', '_sc_e', lineno=cur_lineno))    
+        except_block.append(Instr('CALL_FUNCTION',1, lineno=cur_lineno))
         except_block.append(Instr('POP_TOP', lineno=cur_lineno))
+        # TODO: Handle return value from repair loop
 
-        # except_block.append(Instr('LOAD_NAME','RepairloopRunner', lineno=cur_lineno+1000))
-        # except_block.append(Instr('CALL_FUNCTION',0, lineno=cur_lineno+1000))
-        # except_block.append(Instr('LOAD_METHOD','loop', lineno=cur_lineno+1000))
-        # except_block.append(Instr('LOAD_NAME','e', lineno=cur_lineno+1000))
-        # except_block.append(Instr('CALL_METHOD',1, lineno=cur_lineno+1000))
-
-        if self.is_script_mode:
-            except_block.append(Instr('LOAD_NAME', 'print', lineno=cur_lineno))
-        else:
-            except_block.append(Instr('LOAD_GLOBAL', 'print', lineno=cur_lineno))# TODO: Call Develoop(fn, on_error=only_on_error, runner_class=interface)
-        if self.is_script_mode:
-            except_block.append(Instr('LOAD_NAME', 'e', lineno=cur_lineno))
-        else:
-            except_block.append(Instr('LOAD_FAST', 'e', lineno=cur_lineno))
-        except_block.append(Instr('CALL_FUNCTION', 1, lineno=cur_lineno))
-        except_block.append(Instr('POP_TOP', lineno=cur_lineno)) # Pop except block
-        except_block.append(Instr('RAISE_VARARGS', 0, lineno=cur_lineno)) # TODO: Remove this after experiments
+        # if self.is_script_mode:
+        #     except_block.append(Instr('LOAD_NAME', 'print', lineno=cur_lineno))
+        # else:
+        #     except_block.append(Instr('LOAD_GLOBAL', 'print', lineno=cur_lineno))
+        # if self.is_script_mode:
+        #     except_block.append(Instr('LOAD_NAME', '_sc_e', lineno=cur_lineno))
+        # else:
+        #     except_block.append(Instr('LOAD_FAST', '_sc_e', lineno=cur_lineno))
+        # except_block.append(Instr('CALL_FUNCTION', 1, lineno=cur_lineno))
+        # except_block.append(Instr('POP_TOP', lineno=cur_lineno)) # Pop return
         except_block.append(Instr('POP_BLOCK', lineno=cur_lineno)) # Pop except block
         except_block.append(Instr('POP_EXCEPT', lineno=cur_lineno)) # Pop current Exception
 
         except_block.append(Instr('LOAD_CONST', None, lineno=cur_lineno))
         if self.is_script_mode:
-            except_block.append(Instr('STORE_NAME', 'e', lineno=cur_lineno))
-            except_block.append(Instr('DELETE_NAME', 'e', lineno=cur_lineno))
+            except_block.append(Instr('STORE_NAME', '_sc_e', lineno=cur_lineno))
+            except_block.append(Instr('DELETE_NAME', '_sc_e', lineno=cur_lineno))
         else:
-            except_block.append(Instr('STORE_FAST', 'e', lineno=cur_lineno))
-            except_block.append(Instr('DELETE_FAST', 'e', lineno=cur_lineno))
+            except_block.append(Instr('STORE_FAST', '_sc_e', lineno=cur_lineno))
+            except_block.append(Instr('DELETE_FAST', '_sc_e', lineno=cur_lineno))
 
         if len(remain_instrs)==0 and self.next_label is not None:
             except_block.append(Instr('JUMP_ABSOLUTE', self.next_label, lineno=cur_lineno))
@@ -298,11 +303,11 @@ class Instrumenter:
         except_block.append(except_exception_label)  # Exception in except block
         except_block.append(Instr('LOAD_CONST',None, lineno=cur_lineno))
         if self.is_script_mode:
-            except_block.append(Instr('STORE_NAME','e', lineno=cur_lineno))
-            except_block.append(Instr('DELETE_NAME','e', lineno=cur_lineno))
+            except_block.append(Instr('STORE_NAME','_sc_e', lineno=cur_lineno))
+            except_block.append(Instr('DELETE_NAME','_sc_e', lineno=cur_lineno))
         else:
-            except_block.append(Instr('STORE_FAST','e', lineno=cur_lineno))
-            except_block.append(Instr('DELETE_FAST','e', lineno=cur_lineno))
+            except_block.append(Instr('STORE_FAST','_sc_e', lineno=cur_lineno))
+            except_block.append(Instr('DELETE_FAST','_sc_e', lineno=cur_lineno))
         except_block.append(Instr('RERAISE',0, lineno=cur_lineno))
         
         return try_block,except_block
@@ -341,7 +346,7 @@ class Instrumenter:
         # dump_bytecode(new_bytecode,lineno=True)
         try:
             new_code=new_bytecode.to_code()
-            new_code.replace(co_varnames=tuple(list(new_code.co_varnames)+['e','Exception']))
+            new_code.replace(co_varnames=tuple(list(new_code.co_varnames)+['_sc_e','Exception']))
         except:
             print(code.co_filename)
             dump_bytecode(bc,lineno=True)

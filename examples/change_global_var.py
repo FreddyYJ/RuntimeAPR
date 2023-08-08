@@ -1,11 +1,11 @@
-# from slipcover.jurigged.loop import Develoop
+# from slipcover.jurigged.loop import except_handler
+
 a=0
 
 def temp(a):
     return a!=3
 
 def inc(b):
-    # a+=1
     global a
     a=a+1
     if temp(a):
@@ -15,9 +15,7 @@ def inc(b):
     return a,b
 
 for _ in range(5):
-    try:
+    # try:
         inc(a)
-    except Exception as e:
-        import inspect
-        info:inspect.FrameInfo=inspect.getinnerframes(e.__traceback__)[1]
-        f=info.frame
+    # except Exception as e:
+    #     except_handler(e)
