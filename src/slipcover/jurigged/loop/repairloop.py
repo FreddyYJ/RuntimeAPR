@@ -278,6 +278,22 @@ class RepairloopRunner(RedirectDeveloopRunner):
 
         return is_same
     
+def find_func(vars:Dict[str,object],func_name:str,lineno:int) -> Union[FunctionType,MethodType]:
+    max_lineno=0
+    func:Union[FunctionType,MethodType]=None
+    for k,v in vars.items():
+        if (isinstance(v,FunctionType) or isinstance(v,MethodType)) and k==func_name and \
+                v.__code__.co_firstlineno<=lineno and max_lineno<v.__code__.co_firstlineno:
+            func=v
+            max_lineno=v.__code__.co_firstlineno
+        elif hasattr(v,'__dict__'):
+            _func=find_func(v.__dict__,func_name,lineno)
+            if _func is not None and max_lineno<_func.__code__.co_firstlineno:
+                func=_func
+                max_lineno=_func.__code__.co_firstlineno
+
+    return func
+
 def except_handler(e:Exception):
     innerframes=inspect.getinnerframes(e.__traceback__)
     info:inspect.FrameInfo=innerframes[0]
@@ -286,17 +302,9 @@ def except_handler(e:Exception):
     
     locals=f.f_locals.copy()
     globals=f.f_globals.copy()
-    func:Union[FunctionType,MethodType]=None
-    for k,v in locals.items():
-        if (isinstance(v,FunctionType) or isinstance(v,MethodType)) and k==inner_info.function:
-            func=v
-            break
-
+    func:Union[FunctionType,MethodType]=find_func(locals,inner_info.function,inner_info.lineno)
     if func is None:
-        for k,v in globals.items():
-            if (isinstance(v,FunctionType) or isinstance(v,MethodType)) and k==inner_info.function:
-                func=v
-                break
+        func=find_func(globals,inner_info.function,inner_info.lineno)
     
     assert func is not None
 
