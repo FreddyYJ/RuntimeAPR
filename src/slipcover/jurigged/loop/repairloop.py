@@ -138,12 +138,16 @@ class RepairloopRunner(RedirectDeveloopRunner):
         while not is_same:
             cur_paths,cur_locals,cur_globals=self.run_concolic(before_values)
             
-            self.cond_tree.update_tree(cur_paths)
-
-            if len(cur_locals)!=0 or len(cur_globals)!=0:
-                is_same=self.is_vars_same(cur_locals,cur_globals)
+            if len(cur_paths)==0:
+                # Only one path (current path)
+                print('No more paths to try, return current values.')
+                is_same=True
+            else:
+                self.cond_tree.update_tree(cur_paths)
 
             if not is_same:
+                if len(cur_locals)!=0 or len(cur_globals)!=0:
+                    is_same=self.is_vars_same(cur_locals,cur_globals)
                 # If values are different, try to negate the path
                 # Combine all paths into multiple Ands
                 simple_path=z3.simplify(z3.And(*cur_paths))
