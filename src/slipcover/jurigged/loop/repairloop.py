@@ -148,6 +148,8 @@ class RepairloopRunner(RedirectDeveloopRunner):
             if not is_same:
                 if len(cur_locals)!=0 or len(cur_globals)!=0:
                     is_same=self.is_vars_same(cur_locals,cur_globals)
+                    
+            if not is_same:
                 # If values are different, try to negate the path
                 # Combine all paths into multiple Ands
                 simple_path=z3.simplify(z3.And(*cur_paths))
