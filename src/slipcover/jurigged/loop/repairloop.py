@@ -31,6 +31,10 @@ class RepairloopRunner(RedirectDeveloopRunner):
         self.cfg=ControlDependenceGraph(self.fn)
         self.cond_tree:ConditionTree=ConditionTree(self.cfg.cfg)
 
+        # To record local and global variables at target function return
+        self.target_locals:Dict[str,object]=dict()
+        self.target_globals:Dict[str,object]=dict()
+
     def run_concolic(self,before_values:Dict[str,Any]) -> Tuple[List[z3.BoolRef],Dict[str,object],Dict[str,object]]:
         """
         Run concolic execution with given values.
@@ -81,7 +85,7 @@ class RepairloopRunner(RedirectDeveloopRunner):
             print(f'Decls: {tracer.decls}')
             print(f'Path: {tracer.path}')
             # self.tried_paths.add(z3.simplify(z3.And(*tracer.path)))
-            return tracer.path,dict(),dict()
+            return tracer.path,self.target_locals,self.target_globals
             
     def get_z3_values(self,path):
         """
@@ -215,6 +219,9 @@ class RepairloopRunner(RedirectDeveloopRunner):
             lineno = frame.f_lineno
             if function_name==self.bug_info.buggy_func:
                 self.executed_lines.append(lineno)
+        elif event=='return':
+            self.target_locals=frame.f_locals.copy()
+            self.target_globals=frame.f_globals.copy()
 
         return self.traceit
 
@@ -347,8 +354,9 @@ def except_handler(e:Exception):
 
     print(f'Args: {pos_only+norms+vargs}')
     print(f'Kwargs: {kwonlys}')
-    func(*(pos_only+norms+vargs),**kwonlys)
     bug_info=BugInformation(inner_info.lineno,inner_info.function,
-                            inner_info.frame.f_locals,inner_info.frame.f_globals)
+                            inner_info.frame.f_locals.copy(),inner_info.frame.f_globals.copy())
+    bug_info.local_vars=inner_info.frame.f_locals.copy()
+    bug_info.global_vars=inner_info.frame.f_globals.copy()
     runner=RepairloopRunner(func,(pos_only+norms+vargs),kwonlys,bug_info)
     return runner.loop(e)
