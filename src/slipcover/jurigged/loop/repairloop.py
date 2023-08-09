@@ -9,7 +9,7 @@ import z3
 from bytecode import Bytecode
 
 from .funcast import FunctionFinderVisitor
-from .repairutils import BugInformation,prune_default_global_var,is_default_global
+from .repairutils import BugInformation,prune_default_global_var,is_default_global,compare_object,pickle_object
 from .develoop import RedirectDeveloopRunner
 from ..concolic import ConcolicTracer,get_zvalue,zint,symbolize,ControlDependenceGraph,Block,ConditionTree,ConditionNode
 
@@ -30,6 +30,7 @@ class RepairloopRunner(RedirectDeveloopRunner):
         print(f'Global vars: {self.global_vars_without_default}')
         self.cfg=ControlDependenceGraph(self.fn)
         self.cond_tree:ConditionTree=ConditionTree(self.cfg.cfg)
+        self.skip_global:bool=False # Skip global variables
 
         # To record local and global variables at target function return
         self.target_locals:Dict[str,object]=dict()
@@ -51,17 +52,19 @@ class RepairloopRunner(RedirectDeveloopRunner):
 
             # Symbolize the global variables
             new_globals=dict(self.fn.__globals__)
-            pruned_globals=prune_default_global_var(self.fn,self.fn.__globals__)
-            for name,obj in self.fn.__globals__.items():
-                if name in pruned_globals:
-                    new_globals[name]=symbolize(tracer.context,name,obj,before_values)
-            for name,obj in new_globals.items():
-                self.fn.__globals__[name]=obj
+            if not self.skip_global:
+                pruned_globals=prune_default_global_var(self.fn,self.fn.__globals__)
+                for name,obj in self.fn.__globals__.items():
+                    if name in pruned_globals:
+                        new_globals[name]=symbolize(tracer.context,name,obj,before_values)
+                for name,obj in new_globals.items():
+                    self.fn.__globals__[name]=obj
 
             print(f'original args: {self.args}')
             print(f'args: {new_args}')
-            print(f'original globals: {prune_default_global_var(self.fn,self.fn.__globals__)}')
-            print(f'globals: {prune_default_global_var(self.fn,new_globals)}')
+            if not self.skip_global:
+                print(f'original globals: {prune_default_global_var(self.fn,self.fn.__globals__)}')
+                print(f'globals: {prune_default_global_var(self.fn,new_globals)}')
 
             try:
                 # result= tracer[self.fn](*new_args, **kwargs)
@@ -230,45 +233,38 @@ class RepairloopRunner(RedirectDeveloopRunner):
         print('Compare local variables...')
         for name,obj in local_vars.items():
             try:
-                # Ignore z3 objects
-                if type(obj).__name__.startswith('z'):
-                    continue
                 if name not in self.bug_info.local_vars:
                     is_same=False
                     print(f'New local var {name}: {obj}')
                     break
-                elif pickle.dumps(obj)!=pickle.dumps(self.bug_info.local_vars[name]):
+                
+                _obj=pickle_object(self.fn,name,obj)
+                if _obj is not None:
+                    is_same=compare_object(_obj,self.bug_info.local_vars[name])
+                else:
                     is_same=False
-                    print(f'Different local var {name}: {obj} vs {self.bug_info.local_vars[name]}')
+                if not is_same:
                     break
             except ValueError:
                 print(f'Cannot pickle {name}: {obj}')
                 continue
 
-        if is_same:
+        if is_same and not self.skip_global:
             print('Compare global variables...')
             for name,obj in global_vars.items():
                 if is_default_global(self.fn,name,obj):
-                    continue
-                # Ignore z3 objects
-                if type(obj).__name__.startswith('z'):
                     continue
 
                 if name not in self.global_vars_without_default:
                     # is_same=False
                     print(f'New global var {name}: {obj}')
                     break
-
-                try:
-                    obj_dumped=pickle.dumps(obj)
-                except Exception as e:
-                    # TODO: Handle unpickable objects (C-level objects)
-                    print(f'Cannot pickle {name}: {obj}')
-                    continue
-                
-                if obj_dumped!=pickle.dumps(self.global_vars_without_default[name]):
+                _obj=pickle_object(self.fn,name,obj)
+                if _obj is not None:
+                    is_same=compare_object(_obj,self.global_vars_without_default[name])
+                else:
                     is_same=False
-                    print(f'Different global var {name}: {obj} vs {self.global_vars_without_default[name]}')
+                if not is_same:
                     break
 
         if is_same:
@@ -364,7 +360,13 @@ def except_handler(e:Exception):
     print(f'Kwargs: {kwonlys}')
     bug_info=BugInformation(inner_info.lineno,inner_info.function,
                             inner_info.frame.f_locals.copy(),inner_info.frame.f_globals.copy())
-    bug_info.local_vars=inner_info.frame.f_locals.copy()
-    bug_info.global_vars=inner_info.frame.f_globals.copy()
+    for name,obj in inner_info.frame.f_locals.copy().items():
+        _obj=pickle_object(func,name,obj)
+        if _obj is not None:
+            bug_info.local_vars[name]=_obj
+    for name,obj in prune_default_global_var(func,inner_info.frame.f_globals.copy()).items():
+        _obj=pickle_object(func,name,obj)
+        if _obj is not None:
+            bug_info.global_vars[name]=_obj
     runner=RepairloopRunner(func,(pos_only+norms+vargs),kwonlys,bug_info)
     return runner.loop(e)
