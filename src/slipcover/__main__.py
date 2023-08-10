@@ -42,6 +42,9 @@ ap.add_argument('--stats', action='store_true', help=argparse.SUPPRESS)
 ap.add_argument('--debug', action='store_true', help=argparse.SUPPRESS)
 ap.add_argument('--dont-wrap-pytest', action='store_true', help=argparse.SUPPRESS)
 
+# Custon options for RuntimeAPR
+ap.add_argument('--throw-exception', action='store_true', help="throw exception when an error is occured")
+
 g = ap.add_mutually_exclusive_group(required=True)
 g.add_argument('-m', dest='module', nargs=1, help="run given module as __main__")
 g.add_argument('script', nargs='?', type=Path, help="the script to run")
@@ -103,6 +106,8 @@ def sci_atexit():
 if not args.silent and False:
     atexit.register(sci_atexit)
 
+if args.throw_exception:
+    sci.throw_exception_when_error=True
 
 if args.script:
     sci.is_script_mode=True

@@ -2,11 +2,12 @@ from types import CodeType
 from bytecode import Instr,Bytecode,Label,dump_bytecode
 
 class Instrumenter:
-    def __init__(self,is_script_mode:bool=False):
+    def __init__(self,is_script_mode:bool=False,throw_exception_when_error:bool=False):
         self.delta=0
         self.skip_next_insert=False
         self.next_label=None
         self.is_script_mode=is_script_mode
+        self.throw_exception_when_error=throw_exception_when_error
 
     def __generate_try_except__debug(self,orig_bc:Bytecode,index:int,instr:Instr,no_orig_label:bool=False):
         try_block=[]
@@ -83,6 +84,8 @@ class Instrumenter:
         except_block.append(Instr('POP_TOP', lineno=cur_lineno+180000))
 
         except_block.append(Instr('SETUP_FINALLY',except_exception_label, lineno=cur_lineno+190000)) # Exception in except block
+        if self.throw_exception_when_error:
+            except_block.append(Instr('RAISE_VARARGS',0, lineno=cur_lineno+200000))
         except_block.append(Instr('LOAD_CONST',0,lineno=instr.lineno+112000))
         except_block.append(Instr('LOAD_CONST',('RepairloopRunner',),lineno=instr.lineno+113000))
         except_block.append(Instr('IMPORT_NAME','slipcover.jurigged.loop',lineno=instr.lineno+114000))
@@ -231,6 +234,8 @@ class Instrumenter:
         except_block.append(Instr('POP_TOP', lineno=cur_lineno))
 
         except_block.append(Instr('SETUP_FINALLY',except_exception_label, lineno=cur_lineno)) # Exception in except block
+        if self.throw_exception_when_error:
+            except_block.append(Instr('RAISE_VARARGS',0, lineno=cur_lineno))
         except_block.append(Instr('LOAD_CONST',0,lineno=instr.lineno))
         except_block.append(Instr('LOAD_CONST',('except_handler',),lineno=instr.lineno))
         except_block.append(Instr('IMPORT_NAME','slipcover.jurigged.loop',lineno=instr.lineno))
