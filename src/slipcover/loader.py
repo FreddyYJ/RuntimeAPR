@@ -5,10 +5,7 @@ from pathlib import Path
 import sys
 from typing import Any
 
-from slipcover import Slipcover
-
 from .instrumenter import Instrumenter
-from . import bytecode as bc
 
 
 class RuntimeAPRLoader(Loader):
@@ -153,65 +150,3 @@ class RuntimeAPRImportManager:
                 sys.meta_path.pop(i)
                 break
             i += 1
-
-def runtime_apr_wrap_pytest(sci: Instrumenter, file_matcher: RuntimeAPRFileMatcher):
-    def exec_wrapper(obj, g):
-        if hasattr(obj, 'co_filename') and file_matcher.matches(obj.co_filename) and \
-                '__runtime_apr__' not in obj.co_consts:
-            obj = sci.insert_try_except(obj)
-        # g['RepairloopRunner']=RepairloopRunner
-        exec(obj, g)
-
-    try:
-        import _pytest.assertion.rewrite as pyrewrite
-    except ModuleNotFoundError:
-        return
-
-    for f in Slipcover.find_functions(pyrewrite.__dict__.values(), set()):
-        if 'exec' in f.__code__.co_names:
-            ed = bc.Editor(f.__code__)
-            wrapper_index = ed.add_const(exec_wrapper)
-            ed.replace_global_with_const('exec', wrapper_index)
-            f.__code__ = ed.finish()
-
-
-    if False:
-        import inspect
-
-        expected_sigs = {
-            'rewrite_asserts': ['mod', 'source', 'module_path', 'config'],
-            '_read_pyc': ['source', 'pyc', 'trace'],
-            '_write_pyc': ['state', 'co', 'source_stat', 'pyc']
-        }
-
-        for fun, expected in expected_sigs.items():
-            sig = inspect.signature(pyrewrite.__dict__[fun])
-            if list(sig.parameters) != expected:
-                import warnings
-                warnings.warn(f"Unable to activate pytest branch coverage: unexpected {fun} signature {str(sig)}"
-                              +"; please open an issue at https://github.com/plasma-umass/slipcover .",
-                              RuntimeWarning)
-                return
-
-        orig_rewrite_asserts = pyrewrite.rewrite_asserts
-        def rewrite_asserts_wrapper(*args):
-            # FIXME we should normally subject pre-instrumentation to file_matcher matching...
-            # but the filename isn't clearly available. So here we instead always pre-instrument
-            # (pytest instrumented) files. Our pre-instrumentation adds global assignments that
-            # *should* be innocuous if not followed by sci.instrument.
-            return orig_rewrite_asserts(*args)
-
-        def adjust_name(fn : Path) -> Path:
-            return fn.parent / (fn.stem + "-runtimeapr-0.0.1" + fn.suffix)
-
-        orig_read_pyc = pyrewrite._read_pyc
-        def read_pyc(*args, **kwargs):
-            return orig_read_pyc(*args[:1], adjust_name(args[1]), *args[2:], **kwargs)
-
-        orig_write_pyc = pyrewrite._write_pyc
-        def write_pyc(*args, **kwargs):
-            return orig_write_pyc(*args[:3], adjust_name(args[3]), *args[4:], **kwargs)
-
-        pyrewrite._read_pyc = read_pyc
-        pyrewrite._write_pyc = write_pyc
-        pyrewrite.rewrite_asserts = rewrite_asserts_wrapper

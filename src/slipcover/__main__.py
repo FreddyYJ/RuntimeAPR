@@ -18,7 +18,7 @@ import platform
 #
 import argparse
 
-from . import Instrumenter, RuntimeAPRFileMatcher, runtime_apr_wrap_pytest,RuntimeAPRImportManager
+from . import Instrumenter, RuntimeAPRFileMatcher,RuntimeAPRImportManager
 
 ap = argparse.ArgumentParser(prog='slipcover')
 ap.add_argument('--branch', action='store_true', help="measure both branch and line coverage")
@@ -81,9 +81,8 @@ if args.omit:
 sci=Instrumenter()
 
 
-if not args.dont_wrap_pytest and False:
+# if not args.dont_wrap_pytest:
     # sc.wrap_pytest(sci, file_matcher)
-    runtime_apr_wrap_pytest(sci, file_matcher)
 
 
 
