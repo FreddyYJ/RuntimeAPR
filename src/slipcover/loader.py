@@ -9,7 +9,6 @@ from slipcover import Slipcover
 
 from .instrumenter import Instrumenter
 from . import bytecode as bc
-# from .jurigged.loop import RepairloopRunner
 
 
 class RuntimeAPRLoader(Loader):

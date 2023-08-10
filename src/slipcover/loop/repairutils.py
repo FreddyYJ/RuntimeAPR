@@ -23,7 +23,7 @@ def is_default_global(fn:FunctionType,name,obj):
     """
     if name.startswith("__") and name.endswith("__"):
         return True
-    elif 'jurigged' in name or name=='_sc_e':
+    elif name=='_sc_e':
         return True
     elif inspect.isfunction(obj) or inspect.ismodule(obj) or inspect.ismethod(obj) or inspect.isclass(obj):
         return True

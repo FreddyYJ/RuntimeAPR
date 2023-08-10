@@ -1,4 +1,4 @@
-# from slipcover.jurigged.loop import except_handler
+# from slipcover.loop import except_handler
 
 a=0
 

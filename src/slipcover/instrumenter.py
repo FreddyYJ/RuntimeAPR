@@ -88,7 +88,7 @@ class Instrumenter:
             except_block.append(Instr('RAISE_VARARGS',0, lineno=cur_lineno+200000))
         except_block.append(Instr('LOAD_CONST',0,lineno=instr.lineno+112000))
         except_block.append(Instr('LOAD_CONST',('RepairloopRunner',),lineno=instr.lineno+113000))
-        except_block.append(Instr('IMPORT_NAME','slipcover.jurigged.loop',lineno=instr.lineno+114000))
+        except_block.append(Instr('IMPORT_NAME','slipcover.loop',lineno=instr.lineno+114000))
         except_block.append(Instr('IMPORT_FROM','RepairloopRunner',lineno=instr.lineno+115000))
         if self.is_script_mode:
             except_block.append(Instr('STORE_NAME','RepairloopRunner',lineno=instr.lineno+116000))
@@ -238,7 +238,7 @@ class Instrumenter:
             except_block.append(Instr('RAISE_VARARGS',0, lineno=cur_lineno))
         except_block.append(Instr('LOAD_CONST',0,lineno=instr.lineno))
         except_block.append(Instr('LOAD_CONST',('except_handler',),lineno=instr.lineno))
-        except_block.append(Instr('IMPORT_NAME','slipcover.jurigged.loop',lineno=instr.lineno))
+        except_block.append(Instr('IMPORT_NAME','slipcover.loop',lineno=instr.lineno))
         except_block.append(Instr('IMPORT_FROM','except_handler',lineno=instr.lineno))
         if self.is_script_mode:
             except_block.append(Instr('STORE_NAME', 'except_handler', lineno=cur_lineno))

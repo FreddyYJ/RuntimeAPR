@@ -10,10 +10,9 @@ from bytecode import Bytecode
 
 from .funcast import FunctionFinderVisitor
 from .repairutils import BugInformation,prune_default_global_var,is_default_global,compare_object,pickle_object
-from .develoop import RedirectDeveloopRunner
 from ..concolic import ConcolicTracer,get_zvalue,zint,symbolize,ControlDependenceGraph,Block,ConditionTree,ConditionNode
 
-class RepairloopRunner(RedirectDeveloopRunner):
+class RepairloopRunner:
     def __init__(self, fn:FunctionType, args, kwargs, bug_info:BugInformation):
         """
         :param fn: function to run
@@ -22,7 +21,9 @@ class RepairloopRunner(RedirectDeveloopRunner):
         :param local_vars: local variables from buggy function
         :param global_vars: global variables from buggy function
         """
-        super().__init__(fn, args, kwargs)
+        self.fn=fn
+        self.args=args
+        self.kwargs=kwargs
         self.bug_info=bug_info
         self.global_vars_without_default=prune_default_global_var(fn,bug_info.global_vars)
         self.tried_paths:Set[z3.ExprRef]=set()
