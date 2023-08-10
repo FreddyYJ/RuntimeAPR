@@ -92,7 +92,12 @@ setuptools.setup(
     ext_modules=([probe]),
     python_requires=">=3.8,<3.12",
     install_requires=[
-        "tabulate"
+        "tabulate",
+        "bytecode",
+        "z3-solver",
+        "astor",
+        "py2cfg",
+        "graphviz"
     ],
     classifiers=[
         "Programming Language :: Python :: 3.8",
