@@ -10,7 +10,7 @@ from .instrumenter import Instrumenter
 
 class RuntimeAPRLoader(Loader):
     def __init__(self, sci: Instrumenter, orig_loader: Loader, origin: str):
-        self.sci = sci                  # Slipcover object measuring coverage
+        self.sci = sci                  # Instrumenter object
         self.orig_loader = orig_loader  # original loader we're wrapping
         self.origin = Path(origin)      # module origin (source file for a source loader)
 
@@ -29,7 +29,6 @@ class RuntimeAPRLoader(Loader):
         return self.orig_loader.get_code(name)
 
     def exec_module(self, module):
-        # branch coverage requires pre-instrumentation from source
         if isinstance(self.orig_loader, machinery.SourceFileLoader) and self.origin.exists():
             code = compile(ast.parse(self.origin.read_text()), str(self.origin), "exec")
         else:
@@ -37,7 +36,6 @@ class RuntimeAPRLoader(Loader):
 
         if '__runtime_apr__' not in code.co_consts:
             code = self.sci.insert_try_except(code)
-        # module.__dict__['RepairloopRunner']=RepairloopRunner
         exec(code, module.__dict__)
 
 class RuntimeAPRMetaPathFinder(MetaPathFinder):
