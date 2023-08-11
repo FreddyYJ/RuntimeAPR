@@ -1,5 +1,5 @@
 from .ConcolicTracer import ConcolicTracer
-from .ConcolicTracer import zint,zbool,zstr,get_zvalue,symbolize
+from .ConcolicTracer import zint,zbool,zstr,zfloat,get_zvalue,symbolize
 from .ExpectError import ExpectError
 from .cfg import ControlDependenceGraph
 from .model import CFG,Block

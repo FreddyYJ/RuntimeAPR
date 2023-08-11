@@ -216,6 +216,69 @@ class zint(int):
         if self != 0:
             return True
         return False
+    
+class zfloat(float):
+    def __new__(cls, context, zn, v, *args, **kw):
+        return int.__new__(cls, v, *args, **kw)
+
+    @classmethod
+    def create(cls, context, zn, v=None):
+        if isinstance(v, zint):
+            v=int(v)
+        return zproxy_create(cls, 'Real', z3.Real, context, zn, v)
+
+    def __init__(self, context, z, v=None):
+        self.z, self.v = z, v
+        self.context = context
+
+    def __int__(self):
+        return int(self.v)
+    
+    def __float__(self):
+        return self.v
+
+    def __pos__(self):
+        return self.v
+
+    def _zv(self, o):
+        return (o.z, o.v) if isinstance(o, zfloat) else (z3.RealVal(o), o)
+
+    def __ne__(self, other):
+        z, v = self._zv(other)
+        return zbool(self.context, self.z != z, self.v != v)
+
+    def __eq__(self, other):
+        z, v = self._zv(other)
+        return zbool(self.context, self.z == z, self.v == v)
+
+    def __req__(self, other):
+        return self.__eq__(other)
+
+    def __lt__(self, other):
+        z, v = self._zv(other)
+        return zbool(self.context, self.z < z, self.v < v)
+
+    def __gt__(self, other):
+        z, v = self._zv(other)
+        return zbool(self.context, self.z > z, self.v > v)
+
+    def __le__(self, other):
+        z, v = self._zv(other)
+        return zbool(self.context, z3.Or(self.z < z, self.z == z),
+                     self.v < v or self.v == v)
+
+    def __ge__(self, other):
+        z, v = self._zv(other)
+        return zbool(self.context, z3.Or(self.z > z, self.z == z),
+                     self.v > v or self.v == v)
+    
+    def __bool__(self):
+        # return zbool(self.context, self.z, self.v) <-- not allowed
+        # force registering boolean condition
+        if self != 0:
+            return True
+        return False
+
 
 INT_BINARY_OPS = [
     '__add__',
@@ -252,9 +315,7 @@ def make_int_binary_wrapper(fname, fun, zfun):  # type: ignore
         z_ = zfun(self.z, z)
         v_ = fun(self.v, v)
         if isinstance(v_, float):
-            # we do not implement float results yet.
-            assert round(v_) == v_
-            v_ = round(v_)
+            return zfloat(self.context, z_, v_)
         return zint(self.context, z_, v_)
 
     return proxy
@@ -290,11 +351,20 @@ def make_int_unary_wrapper(fname, fun, zfun):
 
     return proxy
 
+def make_float_unary_wrapper(fname, fun, zfun):
+    def proxy(self):
+        return zfloat(self.context, zfun(self.z), fun(self.v))
+
+    return proxy
+
 def init_concolic_2():
     for fname in INT_UNARY_OPS:
         fun = getattr(int, fname)
         zfun = getattr(z3.ArithRef, fname)
         setattr(zint, fname, make_int_unary_wrapper(fname, fun, zfun))
+        fun= getattr(float, fname)
+        zfun = getattr(z3.ArithRef, fname)
+        setattr(zfloat, fname, make_float_unary_wrapper(fname, fun, zfun))
 
 INITIALIZER_LIST.append(init_concolic_2)
 
@@ -738,12 +808,16 @@ def get_zvalue(ctxt,name:str,obj:object):
         return zstr.create(ctxt,name,obj.v)
     elif type(obj)==zbool:
         return zbool.create(ctxt,name,obj.v)
+    elif type(obj)==zfloat:
+        return zfloat.create(ctxt,name,obj.v)
     elif type(obj)==int:
         return zint.create(ctxt,name,obj)
     elif type(obj)==str:
         return zstr.create(ctxt,name,obj)
     elif type(obj)==bool:
         return zbool.create(ctxt,name,obj)
+    elif type(obj)==float:
+        return zfloat.create(ctxt,name,obj)
     else:
         return obj
 
@@ -751,7 +825,7 @@ def get_zvalue(ctxt,name:str,obj:object):
 initialize()
 
 def symbolize(ctxt,name:str,obj:object,before_objs:Dict[str,object]):
-    if type(obj) in (int,str,bool,zint,zstr,zbool):
+    if type(obj) in (int,str,bool,float,zint,zstr,zbool,zfloat):
         if name in before_objs:
             return get_zvalue(ctxt,name,before_objs[name])
         else:
@@ -762,7 +836,7 @@ def symbolize(ctxt,name:str,obj:object,before_objs:Dict[str,object]):
         for attr_name,value in obj.__dict__.items():
             try:
                 value_name=name+'.'+attr_name
-                if type(value) in (int,str,bool,zint,zstr,zbool):
+                if type(value) in (int,str,bool,float,zint,zstr,zbool,zfloat):
                     if value_name in before_objs:
                         symbol=get_zvalue(ctxt,value_name,before_objs[value_name])
                     else:

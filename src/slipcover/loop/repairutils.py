@@ -4,7 +4,7 @@ from typing import Any, Dict, List, Union
 import inspect
 import pickle
 
-from ..concolic import zint,zbool,zstr
+from ..concolic import zint,zbool,zstr,zfloat
 
 class BugInformation:
     def __init__(self,buggy_line,buggy_func,buggy_args_values,buggy_global_values) -> None:
@@ -56,7 +56,7 @@ __stack=0
 
 def pickle_object(fn:FunctionType,name:str,obj:object):
     global __stack
-    if type(obj) in (zbool,zint,zstr):
+    if type(obj) in (zbool,zint,zstr,zfloat):
         return PickledObject(name,pickle.dumps(obj.v))
     else:
         try:
