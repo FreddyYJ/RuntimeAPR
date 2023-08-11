@@ -51,6 +51,7 @@ class ConditionTree:
         self.false_entry:ConditionNode=None
 
     def __visit_to_update(self,node:ConditionNode,cfg_node:Block,conditions:List[z3.BoolRef],cond_index:int):
+        # Last statement of the block should be branch statement
         if isinstance(cfg_node.statements[-1],ast.If) or isinstance(cfg_node.statements[-1],ast.While):
             next_cond=conditions[cond_index]
 
@@ -75,6 +76,7 @@ class ConditionTree:
         current_cfg_node:Block=self.cfg.entryblock
         current_cond:z3.BoolRef=conditions[0]
         while True:
+            # Last statement of the block should be branch statement
             if isinstance(current_cfg_node.statements[-1],ast.If) or isinstance(current_cfg_node.statements[-1],ast.While):
                 if not str(current_cond).startswith('Not'):
                     # True branch
