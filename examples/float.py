@@ -1,5 +1,5 @@
 a=0.5
-from slipcover.concolic import ConcolicTracer,get_zvalue
+
 def inc():
     global a
     a=a+1.

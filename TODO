@@ -9,7 +9,7 @@ slipcover.loop.repairloop, concolic.ConcolicTracer: Add For statement support or
             ```
 
 slipcover.concolic.ConcolicTracer: Add Iterable (list, set, dict, ...) support
-    - First, check it is already supported
+    - Update loop.repairutils.compare_object to compare elements one by one
 
 slipcover.instrumenter: Handle outer try-except
     - If there are already try-except specific exception, we throw original exception
