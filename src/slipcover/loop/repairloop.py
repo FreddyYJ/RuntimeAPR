@@ -68,19 +68,10 @@ class RepairloopRunner:
                 print(f'globals: {prune_default_global_var(self.fn,new_globals)}')
 
             try:
-                # result= tracer[self.fn](*new_args, **kwargs)
-                # self.executed_lines=[6, 7, 10]
-                self.executed_lines=[]
-                sys.settrace(self.traceit)
                 result=self.fn(*new_args, **self.kwargs)
-                sys.settrace(None)
-                print(f'Lines: {self.executed_lines}')
             except Exception as _exc:
-                sys.settrace(None)
-                print(f'Lines: {self.executed_lines}')
                 print(f'Decls: {tracer.decls}')
                 print(f'Path: {tracer.path}')
-                # self.tried_paths.add(z3.simplify(z3.And(*tracer.path)))
 
                 tb=_exc.__traceback__
                 info=inspect.getinnerframes(tb)[1]
@@ -226,12 +217,7 @@ class RepairloopRunner:
         return 'Finished'
     
     def traceit(self,frame: FrameType, event: str, arg: Any):
-        if event == 'line':
-            function_name = frame.f_code.co_name
-            lineno = frame.f_lineno
-            if function_name==self.bug_info.buggy_func:
-                self.executed_lines.append(lineno)
-        elif event=='return':
+        if event=='return':
             self.target_locals=frame.f_locals.copy()
             self.target_globals=frame.f_globals.copy()
 

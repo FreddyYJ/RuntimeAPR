@@ -1,7 +1,13 @@
-slipcover.loop.repairloop, concolic.ConcolicTracer: Add For statement
-    - Check z3-solver supports For statement
-    - If it is, update ConcolicTracer and condtree to handle For statement
-    - If not, we need another way to handle For statement
+slipcover.loop.repairloop, concolic.ConcolicTracer: Add For statement support or ignore them
+    - z3-solver just ignore for statement, we need another way to handle
+    - To ignore them, update visit_For in concolic.builder not to make new blocks for For statement
+      - Add For statement, body once and after-For in current block
+      - ```python
+            self.add_statement(For)
+            self.add_statement(body)
+            self.add_statement(AfterFor)
+            ...
+        ```
 
 slipcover.concolic.ConcolicTracer: Add Iterable (list, set, dict, ...) support
     - First, check it is already supported
