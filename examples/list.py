@@ -1,14 +1,14 @@
 a=[0,0,0,0,0]
-i=0
+i=-1
 
-def inc(b):
-    global a
-    a[b]=b
+def inc():
+    global a,i
+    i+=1
+    a[i]=i
     if a[2]!=2:
         print(f'a: {a}')
     else:
         raise ValueError
 
-while i<5:
-    inc(i)
-    i+=1
+while i<4:
+    inc()
