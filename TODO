@@ -2,4 +2,18 @@ slipcover.loop.repairloop, concolic.ConcolicTracer: Add For statement
     - Check z3-solver supports For statement
     - If it is, update ConcolicTracer and condtree to handle For statement
     - If not, we need another way to handle For statement
+
 slipcover.concolic.ConcolicTracer: Add Iterable (list, set, dict, ...) support
+    - First, check it is already supported
+
+slipcover.instrumenter: Handle outer try-except
+    - If there are already try-except specific exception, we throw original exception
+      - ```python
+          try:
+              ...
+          except ValueError:
+              raise
+          except Exception as _sc_e:
+              except_handler(_sc_e)
+          ```
+    - If there are already try-except all exception (`except: ...` or `except Exception:`), do not instrument
