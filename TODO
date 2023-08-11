@@ -1,13 +1,12 @@
 slipcover.loop.repairloop, concolic.ConcolicTracer: Add For statement support or ignore them
     - z3-solver just ignore for statement, we need another way to handle
     - To ignore them, update visit_For in concolic.builder not to make new blocks for For statement
-      - Add For statement, body once and after-For in current block
-      - ```python
-            self.add_statement(For)
-            self.add_statement(body)
-            self.add_statement(AfterFor)
-            ...
-        ```
+      - We need to consider how much the body is executed
+      - ex: ```
+          for ... in ...:
+               if ...:
+                    ...
+            ```
 
 slipcover.concolic.ConcolicTracer: Add Iterable (list, set, dict, ...) support
     - First, check it is already supported
