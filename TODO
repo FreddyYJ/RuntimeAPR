@@ -1,4 +1,3 @@
-slipcover.concolic.builder: Add visit_IfExp to handle IfExp
 slipcover.loop.repairloop, concolic.ConcolicTracer: Add For statement
     - Check z3-solver supports For statement
     - If it is, update ConcolicTracer and condtree to handle For statement

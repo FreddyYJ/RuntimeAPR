@@ -29,6 +29,7 @@ from _ast import (
     Yield,
     Try,
     ExceptHandler,
+    IfExp,
 )  # type: ignore
 from py2cfg.model import Block, TryBlock, Link, CFG, FuncBlock
 
@@ -590,6 +591,53 @@ class CFGBuilder(ast.NodeVisitor):
 
         # Continue building the CFG in the after-if block.
         self.current_block = afterif_block
+
+    def visit_IfExp(self, node: IfExp) -> None:
+        # If it already has something in it, we make a new block
+        if self.current_block.statements:
+            # Add the IfExp statement at the beginning of the new block.
+            cond_block = self.new_block()
+            self.add_statement(cond_block, node)
+            self.add_exit(self.current_block, cond_block)
+            self.current_block = cond_block
+        else:
+            # Add the IfExp statement at the end of the current block.
+            self.add_statement(self.current_block, node)
+        if any(isinstance(node.test, T) for T in (ast.Compare, ast.Call)):
+            self.visit(node.test)
+        # Create a new block for the body of the if. (storing the True case)
+        if_block = self.new_block()
+
+        self.add_exit(self.current_block, if_block, node.test)
+
+        # Create a block for the code after the if-else.
+        afterif_block = self.new_block()
+
+        # IfExp always has an else clause.
+        else_block = self.new_block()
+        self.add_exit(self.current_block, else_block, invert(node.test))
+        self.current_block = else_block
+
+        # Visit the children in the body of the else to populate the block.
+        # else of IfExp is always a single expression.
+        self.visit(node.orelse)
+        if not self.current_block.statements:
+            # Add an original Expr node to the block if it is empty.
+            self.add_statement(self.current_block, node.orelse)
+        self.add_exit(self.current_block, afterif_block)
+
+        # Visit children to populate the if block.
+        # body of IfExp is always a single expression.
+        self.current_block = if_block
+        self.visit(node.body)
+        if len(self.current_block.statements) == 1:
+            # Add an original Expr node to the block if it is empty.
+            self.add_statement(self.current_block, node.body)
+        self.add_exit(self.current_block, afterif_block)
+
+        # Continue building the CFG in the after-if block.
+        self.current_block = afterif_block
+
 
     def visit_While(self, node: While) -> None:
         # TODO while/else
