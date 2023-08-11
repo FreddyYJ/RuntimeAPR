@@ -44,6 +44,7 @@ ap.add_argument('--dont-wrap-pytest', action='store_true', help=argparse.SUPPRES
 
 # Custon options for RuntimeAPR
 ap.add_argument('--throw-exception', action='store_true', help="throw exception when an error is occured")
+ap.add_argument('--original-sc', action='store_true', help="run original slipcover instead of runtime apr")
 
 g = ap.add_mutually_exclusive_group(required=True)
 g.add_argument('-m', dest='module', nargs=1, help="run given module as __main__")
@@ -61,8 +62,10 @@ base_path = Path(args.script).resolve().parent if args.script \
             else Path('.').resolve()
 
 
-# file_matcher = sc.FileMatcher()
-file_matcher = RuntimeAPRFileMatcher()
+if args.original_sc:
+    file_matcher = sc.FileMatcher()
+else:
+    file_matcher = RuntimeAPRFileMatcher()
 
 if args.source:
     for s in args.source.split(','):
@@ -75,14 +78,16 @@ if args.omit:
         file_matcher.addOmit(o)
 
 
-# sci = sc.Slipcover(collect_stats=args.stats, immediate=args.immediate,
-#                    d_miss_threshold=args.threshold, branch=args.branch,
-#                    skip_covered=args.skip_covered, disassemble=args.dis)
-sci=Instrumenter()
+if args.original_sc:
+    sci = sc.Slipcover(collect_stats=args.stats, immediate=args.immediate,
+                    d_miss_threshold=args.threshold, branch=args.branch,
+                    skip_covered=args.skip_covered, disassemble=args.dis)
+else:
+    sci=Instrumenter()
 
 
-# if not args.dont_wrap_pytest:
-    # sc.wrap_pytest(sci, file_matcher)
+if args.original_sc and not args.dont_wrap_pytest:
+    sc.wrap_pytest(sci, file_matcher)
 
 
 
@@ -102,14 +107,15 @@ def sci_atexit():
     else:
         print_coverage(sys.stdout)
 
-if not args.silent and False:
+if args.original_sc and not args.silent:
     atexit.register(sci_atexit)
 
-if args.throw_exception:
+if not args.original_sc and args.throw_exception:
     sci.throw_exception_when_error=True
 
 if args.script:
-    sci.is_script_mode=True
+    if not args.original_sc:
+        sci.is_script_mode=True
     # python 'globals' for the script being executed
     script_globals: Dict[Any, Any] = dict()
 
@@ -125,24 +131,30 @@ if args.script:
 
     with open(args.script, "r") as f:
         t = ast.parse(f.read())
-        if False and args.branch:
+        if args.original_sc and args.branch:
             t = br.preinstrument(t)
         code = compile(t, str(Path(args.script).resolve()), "exec")
 
-    # code = sci.instrument(code)
-    code = sci.insert_try_except(code)
-    # with sc.ImportManager(sci, file_matcher):
-    with RuntimeAPRImportManager(sci, file_matcher):
-        exec(code, script_globals)
+    if args.original_sc:
+        code = sci.instrument(code)
+        with sc.ImportManager(sci, file_matcher):
+            exec(code, script_globals)
+    else:
+        code = sci.insert_try_except(code)
+        with RuntimeAPRImportManager(sci, file_matcher):
+            exec(code, script_globals)
 
 else:
     import runpy
     sys.argv = [*args.module, *args.script_or_module_args]
-    # with sc.ImportManager(sci, file_matcher):
-    with RuntimeAPRImportManager(sci, file_matcher):
-        runpy.run_module(*args.module, run_name='__main__', alter_sys=True)
+    if args.original_sc:
+        with sc.ImportManager(sci, file_matcher):
+            runpy.run_module(*args.module, run_name='__main__', alter_sys=True)
+    else:
+        with RuntimeAPRImportManager(sci, file_matcher):
+            runpy.run_module(*args.module, run_name='__main__', alter_sys=True)
 
-if args.fail_under and False:
+if args.original_sc and args.fail_under:
     cov = sci.get_coverage()
     if cov['summary']['percent_covered'] < args.fail_under:
         sys.exit(2)
