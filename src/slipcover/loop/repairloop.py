@@ -118,6 +118,8 @@ class RepairloopRunner:
                     values[model[i].name()]=cur_value.as_long()
                 elif isinstance(cur_value,z3.BoolRef):
                     values[model[i].name()]=cur_value.arg(0)
+                elif isinstance(cur_value,z3.RatNumRef):
+                    values[model[i].name()]=float(cur_value.as_decimal(10))
                 elif isinstance(cur_value,z3.SeqRef):
                     values[model[i].name()]=cur_value.as_string()
                 else:

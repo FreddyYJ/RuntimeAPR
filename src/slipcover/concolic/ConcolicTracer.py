@@ -219,12 +219,12 @@ class zint(int):
     
 class zfloat(float):
     def __new__(cls, context, zn, v, *args, **kw):
-        return int.__new__(cls, v, *args, **kw)
+        return float.__new__(cls, v, *args, **kw)
 
     @classmethod
     def create(cls, context, zn, v=None):
-        if isinstance(v, zint):
-            v=int(v)
+        if isinstance(v, zfloat):
+            v=float(v)
         return zproxy_create(cls, 'Real', z3.Real, context, zn, v)
 
     def __init__(self, context, z, v=None):
@@ -331,6 +331,9 @@ def init_concolic_1():
         fun = getattr(int, fname)
         zfun = getattr(z3.ArithRef, fname)
         setattr(zint, fname, make_int_binary_wrapper(fname, fun, zfun))
+        func= getattr(float, fname)
+        zfunc = getattr(z3.ArithRef, fname)
+        setattr(zfloat, fname, make_int_binary_wrapper(fname, func, zfunc))
 
 INITIALIZER_LIST.append(init_concolic_1)
 
