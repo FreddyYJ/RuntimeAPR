@@ -3,7 +3,7 @@ import subprocess
 def test(subject:str,version:str):
     print(f'Compiling {subject}-{version}')
     result=subprocess.run(['bugsinpy-compile'],stdout=subprocess.PIPE,stderr=subprocess.STDOUT,
-                          cwd=f'/root/project/RuntimeAPR/benchmarks/{subject}/{subject}-{version}')
+                          cwd=f'/root/project/RuntimeAPR/benchmarks/{subject}/{subject}-{version}/{subject}')
     
     # Store the output in the compile.log file
     with open(f'/root/project/RuntimeAPR/benchmarks/{subject}/{subject}-{version}/{subject}/compile.log','w') as f:
@@ -16,7 +16,7 @@ def test(subject:str,version:str):
 
     # Run tests
     result=subprocess.run(['bugsinpy-test'],stdout=subprocess.PIPE,stderr=subprocess.STDOUT,
-                          cwd=f'/root/project/RuntimeAPR/benchmarks/{subject}/{subject}-{version}')
+                          cwd=f'/root/project/RuntimeAPR/benchmarks/{subject}/{subject}-{version}/{subject}')
     
     # Store the output in the test.log file
     with open(f'/root/project/RuntimeAPR/benchmarks/{subject}/{subject}-{version}/{subject}/test.log','w') as f:
