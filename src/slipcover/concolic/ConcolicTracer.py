@@ -833,6 +833,39 @@ def symbolize(ctxt,name:str,obj:object,before_objs:Dict[str,object]):
             return get_zvalue(ctxt,name,before_objs[name])
         else:
             return get_zvalue(ctxt,name,obj)
+    elif type(obj) in (list,set,tuple):
+        # Symbolize elements if object is a list, set or tuple
+        cur_type=type(obj)
+        if cur_type==set:
+            # Convert set to list and sort it to make it deterministic
+            obj=list(obj)
+            obj.sort()
+        elif cur_type==tuple:
+            # Convert tuple to list
+            obj=list(obj)
+
+        # Symbolize elements
+        for i,e in enumerate(obj):
+            cur_name=f'{name}[{i}]'
+            symbol=symbolize(ctxt,cur_name,e,before_objs)
+            obj[i]=symbol
+        
+        if cur_type==set:
+            # Convert list back to tuple
+            obj=set(obj)
+        elif cur_type==tuple:
+            # Convert list back to tuple
+            obj=tuple(obj)
+
+        return obj
+    elif type(obj)==dict:
+        # Symbolize values if object is a dict
+        for k,v in obj.items():
+            cur_name=f'{name}[{k}]'
+            symbol=symbolize(ctxt,cur_name,v,before_objs)
+            obj[k]=symbol
+        
+        return obj
     
     if hasattr(obj,'__dict__'):
         # Symbolize attributes if available

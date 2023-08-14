@@ -58,6 +58,23 @@ def pickle_object(fn:FunctionType,name:str,obj:object):
     global __stack
     if type(obj) in (zbool,zint,zstr,zfloat):
         return PickledObject(name,pickle.dumps(obj.v))
+    elif type(obj) in (list,set,tuple):
+        pickled_obj=PickledObject(name)
+        cur_type=type(obj)
+        if cur_type==set:
+            # Convert set to list and sort it to make it deterministic
+            obj=list(obj)
+            obj.sort()
+        elif cur_type==tuple:
+            # Convert tuple to list
+            obj=list(obj)
+
+        for i,child in enumerate(obj):
+            __stack+=1
+            child_obj=pickle_object(fn,f'{name}[{i}]',child)
+            __stack-=1
+            pickled_obj.children[f'{name}[{i}]']=child_obj
+        return pickled_obj
     else:
         try:
             data=pickle.dumps(obj)
