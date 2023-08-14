@@ -8,3 +8,5 @@ dist/
 .tox/
 *.swp
 .vscode
+benchmarks/*
+!benchmarks/*.py
