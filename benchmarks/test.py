@@ -33,4 +33,5 @@ import benchmark
 
 for sub in benchmark.SUBJECTS:
     for i in range(1,benchmark.BUGS_NUMBER[sub]+1):
-        test(sub,i)
+        if (sub,i) not in benchmark.EXCEPT_BUGS:
+            test(sub,i)
