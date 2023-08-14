@@ -7,15 +7,3 @@ slipcover.loop.repairloop, concolic.ConcolicTracer: Add For statement support or
                if ...:
                     ...
             ```
-
-slipcover.instrumenter: Handle outer try-except
-    - If there are already try-except specific exception, we throw original exception
-      - ```python
-          try:
-              ...
-          except ValueError:
-              raise
-          except Exception as _sc_e:
-              except_handler(_sc_e)
-          ```
-    - If there are already try-except all exception (`except: ...` or `except Exception:`), do not instrument
