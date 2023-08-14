@@ -1,5 +1,3 @@
-# from slipcover.loop import except_handler
-
 a=0
 
 def temp(a):
@@ -12,10 +10,10 @@ def inc(b):
         print(f'a: {a}')
     else:
         raise ValueError
-    return a,b
 
 for _ in range(5):
     # try:
         inc(a)
     # except Exception as e:
+    #     from slipcover.loop import except_handler
     #     except_handler(e)

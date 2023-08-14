@@ -1,5 +1,8 @@
 from types import CodeType
-from bytecode import Instr,Bytecode,Label,dump_bytecode
+from bytecode import Instr,Bytecode,Label,dump_bytecode,Compare
+import sys
+
+PYTHON_VERSION=sys.version_info[:2]
 
 class Instrumenter:
     def __init__(self,is_script_mode:bool=False,throw_exception_when_error:bool=False):
@@ -224,7 +227,11 @@ class Instrumenter:
         except_block.append(except_label)
         except_block.append(Instr('DUP_TOP',lineno=cur_lineno))
         except_block.append(Instr('LOAD_GLOBAL', 'Exception', lineno=cur_lineno))
-        except_block.append(Instr('JUMP_IF_NOT_EXC_MATCH',dummy_label, lineno=cur_lineno)) # Jump if current Exception is not Exception
+        if PYTHON_VERSION[1]<=8:
+            except_block.append(Instr('COMPARE_OP', Compare.EXC_MATCH, lineno=cur_lineno))
+            except_block.append(Instr('POP_JUMP_IF_FALSE', dummy_label, lineno=cur_lineno))
+        else:
+            except_block.append(Instr('JUMP_IF_NOT_EXC_MATCH',dummy_label, lineno=cur_lineno)) # Jump if current Exception is not Exception
         except_block.append(Instr('POP_TOP', lineno=cur_lineno))
         if self.is_script_mode:
             except_block.append(Instr('STORE_NAME', '_sc_e', lineno=cur_lineno))
@@ -295,16 +302,29 @@ class Instrumenter:
 
         # Create dummy and except_exception block
         except_block.append(dummy_label)  # Not handled exceptions
-        except_block.append(Instr('RERAISE',1, lineno=cur_lineno))
-        except_block.append(except_exception_label)  # Exception in except block
-        except_block.append(Instr('LOAD_CONST',None, lineno=cur_lineno))
-        if self.is_script_mode:
-            except_block.append(Instr('STORE_NAME','_sc_e', lineno=cur_lineno))
-            except_block.append(Instr('DELETE_NAME','_sc_e', lineno=cur_lineno))
+        if PYTHON_VERSION[1]<=8:
+            except_block.append(Instr('POP_TOP', lineno=cur_lineno))
+            except_block.append(Instr('POP_TOP', lineno=cur_lineno))
+            except_block.append(Instr('POP_TOP', lineno=cur_lineno))
+            except_block.append(Instr('RAISE_VARARGS',0, lineno=cur_lineno))
         else:
-            except_block.append(Instr('STORE_FAST','_sc_e', lineno=cur_lineno))
-            except_block.append(Instr('DELETE_FAST','_sc_e', lineno=cur_lineno))
-        except_block.append(Instr('RERAISE',0, lineno=cur_lineno))
+            except_block.append(Instr('RERAISE',1, lineno=cur_lineno))
+
+        except_block.append(except_exception_label)  # Exception in except block
+        if PYTHON_VERSION[1]<=8:
+            except_block.append(Instr('POP_TOP', lineno=cur_lineno))
+            except_block.append(Instr('POP_TOP', lineno=cur_lineno))
+            except_block.append(Instr('POP_TOP', lineno=cur_lineno))
+            except_block.append(Instr('RAISE_VARARGS',0, lineno=cur_lineno))
+        else:
+            except_block.append(Instr('LOAD_CONST',None, lineno=cur_lineno))
+            if self.is_script_mode:
+                except_block.append(Instr('STORE_NAME','_sc_e', lineno=cur_lineno))
+                except_block.append(Instr('DELETE_NAME','_sc_e', lineno=cur_lineno))
+            else:
+                except_block.append(Instr('STORE_FAST','_sc_e', lineno=cur_lineno))
+                except_block.append(Instr('DELETE_FAST','_sc_e', lineno=cur_lineno))
+            except_block.append(Instr('RERAISE',0, lineno=cur_lineno))
         
         return try_block,except_block
 
