@@ -33,4 +33,4 @@ import benchmark
 
 for sub in benchmark.SUBJECTS:
     for i in range(1,benchmark.BUGS_NUMBER[sub]+1):
-        checkout(sub,i)
+        test(sub,i)
