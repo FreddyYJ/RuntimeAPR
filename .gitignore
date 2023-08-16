@@ -10,4 +10,5 @@ dist/
 .vscode
 benchmarks/*
 !benchmarks/*.py
+!benchmarks/diffs
 pyrightconfig.json
