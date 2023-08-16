@@ -1,9 +1,8 @@
-slipcover.loop.repairloop, concolic.ConcolicTracer: Add For statement support or ignore them
-    - z3-solver just ignore for statement, we need another way to handle
-    - To ignore them, update visit_For in concolic.builder not to make new blocks for For statement
-      - We need to consider how much the body is executed
-      - ex: ```
-          for ... in ...:
-               if ...:
-                    ...
-            ```
+slipcover.loop.repairloop, concolic.ConcolicTracer: Add For statement support
+  - We need to consider how much the body is executed
+  - ex: ```
+      for ... in ...:
+            if ...:
+                ...
+        ```
+  - z3-solver cannot handle the conditions inside the for loop
