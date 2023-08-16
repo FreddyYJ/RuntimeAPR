@@ -39,8 +39,15 @@ def checkout_fixed(subject:str,version:int):
 
 
 import benchmark
+import multiprocessing as mp
+
+pool=mp.Pool(30)
 
 for sub in benchmark.SUBJECTS:
     for i in range(1,benchmark.BUGS_NUMBER[sub]+1):
         if (sub,i) not in benchmark.EXCEPT_BUGS:
-            checkout_fixed(sub,i)
+            pool.apply_async(checkout,args=(sub,i))
+            pool.apply_async(checkout_fixed,args=(sub,i))
+
+pool.close()
+pool.join()

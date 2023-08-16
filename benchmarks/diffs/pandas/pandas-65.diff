@@ -1,0 +1,69 @@
+diff --git a/pandas/_libs/parsers.pyx b/pandas/_libs/parsers.pyx
+index 377d49f2bb..3077f73a8d 100644
+--- a/pandas/_libs/parsers.pyx
++++ b/pandas/_libs/parsers.pyx
+@@ -638,7 +638,7 @@ cdef class TextReader:
+                 raise ValueError(f'Unrecognized compression type: '
+                                  f'{self.compression}')
+ 
+-            if self.encoding and isinstance(source, io.BufferedIOBase):
++            if self.encoding and isinstance(source, (io.BufferedIOBase, io.RawIOBase)):
+                 source = io.TextIOWrapper(
+                     source, self.encoding.decode('utf-8'), newline='')
+ 
+diff --git a/pandas/io/common.py b/pandas/io/common.py
+index 00f2961e41..e506cc155d 100644
+--- a/pandas/io/common.py
++++ b/pandas/io/common.py
+@@ -3,7 +3,7 @@
+ import bz2
+ from collections import abc
+ import gzip
+-from io import BufferedIOBase, BytesIO
++from io import BufferedIOBase, BytesIO, RawIOBase
+ import mmap
+ import os
+ import pathlib
+@@ -359,9 +359,9 @@ def get_handle(
+     try:
+         from s3fs import S3File
+ 
+-        need_text_wrapping = (BufferedIOBase, S3File)
++        need_text_wrapping = (BufferedIOBase, RawIOBase, S3File)
+     except ImportError:
+-        need_text_wrapping = BufferedIOBase  # type: ignore
++        need_text_wrapping = (BufferedIOBase, RawIOBase)  # type: ignore
+ 
+     handles: List[IO] = list()
+     f = path_or_buf
+@@ -437,7 +437,7 @@ def get_handle(
+         from io import TextIOWrapper
+ 
+         g = TextIOWrapper(f, encoding=encoding, newline="")
+-        if not isinstance(f, BufferedIOBase):
++        if not isinstance(f, (BufferedIOBase, RawIOBase)):
+             handles.append(g)
+         f = g
+ 
+diff --git a/pandas/io/parsers.py b/pandas/io/parsers.py
+index b38aa9770a..8bc8470ae7 100755
+--- a/pandas/io/parsers.py
++++ b/pandas/io/parsers.py
+@@ -5,7 +5,7 @@ Module contains tools for processing files into DataFrames or other objects
+ from collections import abc, defaultdict
+ import csv
+ import datetime
+-from io import BufferedIOBase, StringIO, TextIOWrapper
++from io import BufferedIOBase, RawIOBase, StringIO, TextIOWrapper
+ import re
+ import sys
+ from textwrap import fill
+@@ -1872,7 +1872,7 @@ class CParserWrapper(ParserBase):
+ 
+             # Handle the file object with universal line mode enabled.
+             # We will handle the newline character ourselves later on.
+-            if isinstance(src, BufferedIOBase):
++            if isinstance(src, (BufferedIOBase, RawIOBase)):
+                 src = TextIOWrapper(src, encoding=encoding, newline="")
+ 
+             kwds["encoding"] = "utf-8"

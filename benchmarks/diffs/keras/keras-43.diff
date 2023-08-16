@@ -1,0 +1,26 @@
+diff --git a/docs/mkdocs.yml b/docs/mkdocs.yml
+index 64519a63..6c44f5db 100644
+--- a/docs/mkdocs.yml
++++ b/docs/mkdocs.yml
+@@ -1,6 +1,6 @@
+ site_name: Keras Documentation
+-theme: readthedocs
+-#theme_dir: theme
++# theme: readthedocs
++theme_dir: theme
+ docs_dir: sources
+ repo_url: http://github.com/fchollet/keras
+ site_url: http://keras.io/
+diff --git a/keras/utils/np_utils.py b/keras/utils/np_utils.py
+index 7c3bccf4..572d0e5d 100644
+--- a/keras/utils/np_utils.py
++++ b/keras/utils/np_utils.py
+@@ -19,6 +19,8 @@ def to_categorical(y, num_classes=None):
+     """
+     y = np.array(y, dtype='int')
+     input_shape = y.shape
++    if input_shape and input_shape[-1] == 1:
++        input_shape = tuple(input_shape[:-1])
+     y = y.ravel()
+     if not num_classes:
+         num_classes = np.max(y) + 1
