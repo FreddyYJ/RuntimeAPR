@@ -64,12 +64,31 @@ class ConditionTree:
             else:
                 # False branch
                 if node.false_child is None:
+                    # Only one branch exist if false branch is function end
                     if len(cfg_node.exits)>=2:
                         node.false_child=ConditionNode(cfg_node.exits[1].target.at(),next_cond,cfg_node,cfg_node.exits[1].target)
                     else:
                         node.false_child=ConditionNode(-1,next_cond,cfg_node)
                 if len(cfg_node.exits)>=2:
                     self.__visit_to_update(node.false_child,cfg_node.exits[1].target,conditions,cond_index+1)
+        elif isinstance(cfg_node.statements[-1],ast.For):
+            next_cond=conditions[cond_index]
+            cond_lineno=next_cond.cond_lineno
+            if cfg_node.statements[-1].lineno<=cond_lineno<=cfg_node.statements[-1].end_lineno:
+                # Go to body
+                if node.true_child is None:
+                    # Create dummy node with None condition
+                    node.true_child=ConditionNode(cfg_node.exits[0].target.at(),None,cfg_node,cfg_node.exits[0].target)
+                self.__visit_to_update(node.true_child,cfg_node.exits[0].target,conditions,cond_index)
+            else:
+                # Exit for statement
+                if node.false_child is None:
+                    if len(cfg_node.exits)>=2:
+                        node.false_child=ConditionNode(cfg_node.exits[1].target.at(),None,cfg_node,cfg_node.exits[1].target)
+                    else:
+                        node.false_child=ConditionNode(-1,None,cfg_node)
+                if len(cfg_node.exits)>=2:
+                    self.__visit_to_update(node.false_child,cfg_node.exits[1].target,conditions,cond_index)
         elif len(cfg_node.exits)>0:
             self.__visit_to_update(node,cfg_node.exits[0].target,conditions,cond_index)
 
@@ -96,6 +115,25 @@ class ConditionTree:
                     if len(current_cfg_node.exits)>=2:
                         self.__visit_to_update(self.false_entry,current_cfg_node.exits[1].target,conditions,1)
                     break
+            elif isinstance(current_cfg_node.statements[-1],ast.For):
+                cond_lineno=current_cond.cond_lineno
+                if current_cfg_node.statements[-1].lineno<=cond_lineno<=current_cfg_node.statements[-1].end_lineno:
+                    # Go to body
+                    if self.true_entry is None:
+                        # Create dummy node with None condition
+                        self.true_entry=ConditionNode(current_cfg_node.exits[0].target.at(),None,current_cfg_node,current_cfg_node.exits[0].target)
+                    self.__visit_to_update(self.true_entry,current_cfg_node.exits[0].target,conditions,0)
+                    break
+                else:
+                    # Exit for statement
+                    if self.false_entry is None:
+                        if len(current_cfg_node.exits)>=2:
+                            self.false_entry=ConditionNode(current_cfg_node.exits[1].target.at(),None,current_cfg_node,current_cfg_node.exits[1].target)
+                        else:
+                            self.false_entry=ConditionNode(-1,None,current_cfg_node)
+                    if len(current_cfg_node.exits)>=2:
+                        self.__visit_to_update(self.false_entry,current_cfg_node.exits[1].target,conditions,0)
+                    break
             else:
                 current_cfg_node=current_cfg_node.exits[0].target
 
@@ -108,34 +146,40 @@ class ConditionTree:
         if node.true_child is not None:
             if node.true_child.reachable:
                 # Try to visit true branch
-                paths.append(node.true_child.condition)
+                if node.true_child.condition is not None:
+                    paths.append(node.true_child.condition)
                 is_return=self.__visit_path_dfs(node.true_child,paths)
                 if is_return:
                     # We found the path, stop searching
                     return True
                 else:
                     # We didn't find the path, remove the path
-                    paths.pop()
+                    if node.true_child.condition is not None:
+                        paths.pop()
         else:
             # Only false branch exist, select true branch
-            paths.append(node.false_child.condition.arg(0))
+            if node.false_child.condition is not None:
+                paths.append(node.false_child.condition.arg(0))
             return True
         
         if node.false_child is None:
             # Only true branch exist, select false branch
-            paths.append(z3.Not(node.true_child.condition))
+            if node.true_child.condition is not None:
+                paths.append(z3.Not(node.true_child.condition))
             return True
         else:
             if node.false_child.reachable:
                 # Try to visit false branch, if true branch is not the path or not exist
-                paths.append(node.false_child.condition)
+                if node.false_child.condition is not None:
+                    paths.append(node.false_child.condition)
                 is_return=self.__visit_path_dfs(node.false_child,paths)
                 if is_return:
                     # We found the path, stop searching
                     return True
                 else:
                     # We didn't find the path, remove the path
-                    paths.pop()
+                    if node.false_child.condition is not None:
+                        paths.pop()
 
         # We failed to find the path in this node :(
         return False
@@ -145,28 +189,39 @@ class ConditionTree:
         res=False
         if self.true_entry is not None and self.true_entry.reachable:
             # Try True branch first
-            paths.append(self.true_entry.condition)
+            if self.true_entry.condition is not None:
+                paths.append(self.true_entry.condition)
             res=self.__visit_path_dfs(self.true_entry,paths)
         elif self.true_entry is not None and self.false_entry is None:
             # Only True branch exist, but unreachable
-            return [z3.Not(self.true_entry.condition)]
+            if self.true_entry.condition is not None:
+                return [z3.Not(self.true_entry.condition)]
+            else:
+                return []
 
         if res:
             return paths
 
         if self.false_entry is not None and self.false_entry.reachable:
             # Try False branch if True branch is none or failed to find path
-            paths.append(self.false_entry.condition)
+            if self.false_entry.condition is not None:
+                paths.append(self.false_entry.condition)
             res=self.__visit_path_dfs(self.false_entry,paths)
         else:
             # Only False branch exist, but unreachable
-            return [self.false_entry.condition.arg(0)]
+            if self.false_entry.condition is not None:
+                return [self.false_entry.condition.arg(0)]
+            else:
+                return []
         if res:
             return paths
         
         # True is none and failed to find path in false
         assert self.true_entry is None,f'Both branches are None'
-        return [self.false_entry.condition.arg(0)]
+        if self.false_entry.condition is not None:
+            return [self.false_entry.condition.arg(0)]
+        else:
+            return []
     
     def __visit_path_random(self,node:ConditionNode,paths:List[z3.BoolRef]):
         # TODO: Prevent duplicate path
@@ -180,41 +235,49 @@ class ConditionTree:
                 # Both are exist and reachable
                 if random.randint(0,1)==0:
                     # Try to visit true branch
-                    paths.append(node.true_child.condition)
+                    if node.true_child.condition is not None:
+                        paths.append(node.true_child.condition)
                     is_return=self.__visit_path_random(node.true_child,paths)
                     if is_return:
                         # We found the path, stop searching
                         return True
                     else:
                         # We didn't find the path, remove the path
-                        paths.pop()
+                        if node.true_child.condition is not None:
+                            paths.pop()
                 else:
                     # Try to visit false branch
-                    paths.append(node.false_child.condition)
+                    if node.false_child.condition is not None:
+                        paths.append(node.false_child.condition)
                     is_return=self.__visit_path_random(node.false_child,paths)
                     if is_return:
                         # We found the path, stop searching
                         return True
                     else:
                         # We didn't find the path, remove the path
-                        paths.pop()
+                        if node.false_child.condition is not None:
+                            paths.pop()
             else:
                 # Only true branch exist, select true branch
-                paths.append(node.true_child.condition)
+                if node.true_child.condition is not None:
+                    paths.append(node.true_child.condition)
                 is_return=self.__visit_path_random(node.true_child,paths)
                 if is_return:
                     return True
                 else:
-                    paths.pop()
+                    if node.true_child.condition is not None:
+                        paths.pop()
         else:
             # Only false branch exist, select false branch
             if node.false_child is not None and node.false_child.reachable:
-                paths.append(node.false_child.condition)
+                if node.false_child.condition is not None:
+                    paths.append(node.false_child.condition)
                 is_return=self.__visit_path_random(node.false_child,paths)
                 if is_return:
                     return True
                 else:
-                    paths.pop()
+                    if node.false_child.condition is not None:
+                        paths.pop()
             else:
                 # Both are not exist or not reachable
                 return False
