@@ -2,7 +2,7 @@ import subprocess
 
 def test(subject:str,version:str):
     print(f'Compiling {subject}-{version}')
-    result=subprocess.run(['bugsinpy-compile'],stdout=subprocess.PIPE,stderr=subprocess.STDOUT,
+    result=subprocess.run(['bugsinpy-compile'],stdout=subprocess.PIPE,stderr=subprocess.STDOUT,timeout=180,
                           cwd=f'/root/project/RuntimeAPR/benchmarks/{subject}/{subject}-{version}/{subject}')
     
     # Store the output in the compile.log file
@@ -15,7 +15,7 @@ def test(subject:str,version:str):
         print(f'{subject}-{version} compile success, running tests')
 
     # Run tests
-    result=subprocess.run(['bugsinpy-test','-a'],stdout=subprocess.PIPE,stderr=subprocess.STDOUT,
+    result=subprocess.run(['bugsinpy-test','-a'],stdout=subprocess.PIPE,stderr=subprocess.STDOUT,timeout=180,
                           cwd=f'/root/project/RuntimeAPR/benchmarks/{subject}/{subject}-{version}/{subject}')
     
     # Store the output in the test.log file
@@ -31,7 +31,7 @@ def test(subject:str,version:str):
     
 def test_fixed(subject:str,version:str):
     print(f'Compiling {subject}-{version}f')
-    result=subprocess.run(['bugsinpy-compile'],stdout=subprocess.PIPE,stderr=subprocess.STDOUT,
+    result=subprocess.run(['bugsinpy-compile'],stdout=subprocess.PIPE,stderr=subprocess.STDOUT,timeout=180,
                           cwd=f'/root/project/RuntimeAPR/benchmarks/{subject}/{subject}-{version}f/{subject}')
     
     # Store the output in the compile.log file
@@ -44,7 +44,7 @@ def test_fixed(subject:str,version:str):
         print(f'{subject}-{version}f compile success, running tests')
 
     # Run tests
-    result=subprocess.run(['bugsinpy-test','-a'],stdout=subprocess.PIPE,stderr=subprocess.STDOUT,
+    result=subprocess.run(['bugsinpy-test','-a'],stdout=subprocess.PIPE,stderr=subprocess.STDOUT,timeout=180,
                           cwd=f'/root/project/RuntimeAPR/benchmarks/{subject}/{subject}-{version}f/{subject}')
     
     # Store the output in the test.log file
