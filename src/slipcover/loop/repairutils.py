@@ -27,6 +27,8 @@ def is_default_global(fn:FunctionType,name,obj):
         return True
     elif inspect.isfunction(obj) or inspect.ismodule(obj) or inspect.ismethod(obj) or inspect.isclass(obj):
         return True
+    elif '_lru_cache_wrapper' in str(type(obj)):
+        return True
     
     if name==fn.__name__:
         return True

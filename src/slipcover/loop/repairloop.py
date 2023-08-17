@@ -13,6 +13,8 @@ from .funcast import FunctionFinderVisitor
 from .repairutils import BugInformation,prune_default_global_var,is_default_global,compare_object,pickle_object
 from ..concolic import ConcolicTracer,get_zvalue,zint,symbolize,ControlDependenceGraph,Block,ConditionTree,ConditionNode
 
+import pickle
+
 class RepairloopRunner:
     def __init__(self, fn:FunctionType, args, kwargs, bug_info:BugInformation):
         """
@@ -218,6 +220,7 @@ class RepairloopRunner:
 
             print('Get buggy inputs and states...')
             buggy_values=self.get_buggy_values()
+            exit(0)
             
         if is_same:
             print(f'Same result after {self.trial} trials.')
@@ -311,7 +314,6 @@ def except_handler(e:Exception):
     innerframes=inspect.getinnerframes(e.__traceback__)
     info:inspect.FrameInfo=innerframes[0]
     inner_info:inspect.FrameInfo=innerframes[1]
-    f=info.frame
     
     objects=gc.get_referrers(inner_info.frame.f_code)
     for obj in objects:
