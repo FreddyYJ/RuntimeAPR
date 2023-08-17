@@ -39,7 +39,7 @@ class RepairloopRunner:
         self.target_globals:Dict[str,object]=dict()
 
         # Save object states in the file, for the debug
-        self.save_states_file:str=os.environ.get('APR_SAVE_FILE','')
+        self.save_states_file:str=os.environ.get('APR_SAVE_FILE','/dev/null')
         self.is_append=False
 
     def run_concolic(self,before_values:Dict[str,Any]) -> Tuple[List[z3.BoolRef],Dict[str,object],Dict[str,object]]:
@@ -218,7 +218,6 @@ class RepairloopRunner:
 
             print('Get buggy inputs and states...')
             buggy_values=self.get_buggy_values()
-            exit(0)
             
         if is_same:
             print(f'Same result after {self.trial} trials.')

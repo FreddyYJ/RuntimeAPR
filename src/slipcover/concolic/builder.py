@@ -394,6 +394,8 @@ class CFGBuilder(ast.NodeVisitor):
                     return node.value.id
                 elif "attr" in node.value._fields:
                     return visit_func(node.value)
+                elif isinstance(node.value, ast.Call):
+                    return visit_func(node.value)
                 else:
                     raise AttributeError(
                         "WTF is this thing, build it in??", type(node)
@@ -466,7 +468,8 @@ class CFGBuilder(ast.NodeVisitor):
         elif isinstance(node.exc, ast.Name):
             e_id = node.exc.id
         else:
-            raise ValueError(f"Unexpected object {node.exc}")
+            e_id=None
+            # raise ValueError(f"Unexpected object {node.exc}",node.lineno)
 
         for tryobj in list(self.try_stack):
 
