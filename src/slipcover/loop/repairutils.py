@@ -50,7 +50,10 @@ class PickledObject:
         if self.data!=b'':
             return f'{self.name}: {self.data}'
         else:
-            return f'{self.name}: {self.children}'
+            string=f'{self.name}:\n'
+            for name,child in self.children.items():
+                string+=f'\t{name}: {child}\n'
+            return string
 
 __stack=0
 

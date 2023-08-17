@@ -25,7 +25,7 @@ ap.add_argument('--branch', action='store_true', help="measure both branch and l
 ap.add_argument('--json', action='store_true', help="select JSON output")
 ap.add_argument('--pretty-print', action='store_true', help="pretty-print JSON output")
 ap.add_argument('--out', type=Path, help="specify output file name")
-ap.add_argument('--source', help="specify directories to cover")
+ap.add_argument('--source', help="specify directories or files to cover, seperated by comma(,)")
 ap.add_argument('--omit', help="specify file(s) to omit")
 ap.add_argument('--immediate', action='store_true',
                 help=(argparse.SUPPRESS if platform.python_implementation() == "PyPy" else "request immediate de-instrumentation"))

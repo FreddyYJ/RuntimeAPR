@@ -97,7 +97,8 @@ setuptools.setup(
         "z3-solver",
         "astor",
         "py2cfg",
-        "graphviz"
+        "graphviz",
+        "typing-extensions"
     ],
     classifiers=[
         "Programming Language :: Python :: 3.8",

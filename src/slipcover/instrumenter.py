@@ -17,8 +17,8 @@ class Instrumenter:
         self.code_stack=[]
     
     def _get_handled_exception(self,setup_finally_instr:Instr):
+        except_label:Label=setup_finally_instr.arg
         for code in self.code_stack:
-            except_label:Label=setup_finally_instr.arg
             if setup_finally_instr in code:
                 label_index=code.index(except_label)
                 specified_exception=set()
@@ -29,23 +29,26 @@ class Instrumenter:
                         specified_exception.add(code[next_index+2].arg)
                         return code[next_index+4]
                     else:
-                        return -1
+                        return None
                 
                 if isinstance(code[label_index+1],Instr) and code[label_index+1].name=='DUP_TOP':
                     # Exception specified
                     specified_exception.add(code[label_index+2].arg)
-                    next_label=code[label_index+4].arg
-                    while next_label!=-1:
+                    next_label=code[label_index+4]
+                    while next_label is not None:
                         next_label=search_next_exception(next_label)
             
                 return specified_exception
         
-        assert False, 'Except block not found in code stack'
+        # assert False, 'Except block not found in code stack'
+        return set()
 
     def _try_except_exist(self):
         for instr in self.block_stack:
             if isinstance(instr,Instr) and instr.name=='SETUP_FINALLY':
-                return True
+                for code in self.code_stack:
+                    if instr in code:
+                        return True
         return False
     
     def __generate_try_except(self,orig_bc:Bytecode,index:int,instr:Instr,no_orig_label:bool=False):
@@ -181,6 +184,7 @@ class Instrumenter:
         #     except_block.append(Instr('LOAD_FAST', '_sc_e', lineno=cur_lineno))
         # except_block.append(Instr('CALL_FUNCTION', 1, lineno=cur_lineno))
         # except_block.append(Instr('POP_TOP', lineno=cur_lineno)) # Pop return
+
         except_block.append(Instr('POP_BLOCK', lineno=cur_lineno)) # Pop except block
         except_block.append(Instr('POP_EXCEPT', lineno=cur_lineno)) # Pop current Exception
 

@@ -1,5 +1,5 @@
 import inspect
-import pickle
+import os
 import sys
 from types import FrameType, FunctionType, MethodType
 from typing import Any, Dict, List, Set, Tuple, Union
@@ -7,6 +7,7 @@ import ast
 
 import z3
 from bytecode import Bytecode
+import gc
 
 from .funcast import FunctionFinderVisitor
 from .repairutils import BugInformation,prune_default_global_var,is_default_global,compare_object,pickle_object
@@ -36,6 +37,10 @@ class RepairloopRunner:
         # To record local and global variables at target function return
         self.target_locals:Dict[str,object]=dict()
         self.target_globals:Dict[str,object]=dict()
+
+        # Save object states in the file, for the debug
+        self.save_states_file:str=os.environ.get('APR_SAVE_FILE','')
+        self.is_append=False
 
     def run_concolic(self,before_values:Dict[str,Any]) -> Tuple[List[z3.BoolRef],Dict[str,object],Dict[str,object]]:
         """
@@ -68,8 +73,11 @@ class RepairloopRunner:
                 print(f'globals: {prune_default_global_var(self.fn,new_globals)}')
 
             try:
+                sys.settrace(self.traceit)
                 result=self.fn(*new_args, **self.kwargs)
+                sys.settrace(None)
             except Exception as _exc:
+                sys.settrace(None)
                 print(f'Decls: {tracer.decls}')
                 print(f'Path: {tracer.path}')
 
@@ -130,6 +138,8 @@ class RepairloopRunner:
         before_values:Dict[str,object]=dict()
 
         while not is_same:
+            self.trial+=1
+            print(f'Trial {self.trial}...')
             cur_paths,cur_locals,cur_globals=self.run_concolic(before_values)
             
             if len(cur_paths)==0:
@@ -142,6 +152,9 @@ class RepairloopRunner:
             if not is_same:
                 if len(cur_locals)!=0 or len(cur_globals)!=0:
                     is_same=self.is_vars_same(cur_locals,cur_globals)
+            else:
+                if len(cur_locals)!=0 or len(cur_globals)!=0:
+                    self.is_vars_same(cur_locals,cur_globals)
                     
             if not is_same:
                 # If values are different, try to negate the path
@@ -195,13 +208,11 @@ class RepairloopRunner:
         Run the function and compare variables with buggy
         """
         is_same=False
-        trial=0
+        self.trial=0
         MAX_TRIAL=10
         print(f'Function throws an exception: {from_error}, move to repair loop.')
         while not is_same:
-            trial+=1
-            print(f'Trial {trial}...')
-            if trial>MAX_TRIAL:
+            if self.trial>MAX_TRIAL:
                 print("Max trial 100 reached. Stop.")
                 break
 
@@ -210,7 +221,7 @@ class RepairloopRunner:
             exit(0)
             
         if is_same:
-            print(f'Same result after {trial} trials.')
+            print(f'Same result after {self.trial} trials.')
 
         # TODO: Repair a crash, execute repaired function with original inputs and return the result
         exit(0)
@@ -225,26 +236,44 @@ class RepairloopRunner:
 
     def is_vars_same(self,local_vars,global_vars):
         is_same=True
+        if self.is_append:
+            save_file=open(self.save_states_file,'a')
+        else:
+            save_file=open(self.save_states_file,'w')
+            self.is_append=True
+        save_file.write(f'Trial {self.trial}:\n')
+
+        save_file.write(f'Local vars:\n')
         print('Compare local variables...')
         for name,obj in local_vars.items():
             try:
                 if name not in self.bug_info.local_vars:
                     is_same=False
                     print(f'New local var {name}: {obj}')
+                    save_file.write(f'New local var {name}: {type(obj)}: {pickle_object(self.fn,name,obj)}\n')
                     break
                 
                 _obj=pickle_object(self.fn,name,obj)
                 if _obj is not None:
-                    is_same=compare_object(_obj,self.bug_info.local_vars[name])
+                    _is_same=compare_object(_obj,self.bug_info.local_vars[name])
+                    if is_same:
+                        is_same=_is_same
+                    if _is_same:
+                        save_file.write(f'Same local vars {name}: {type(obj)}: {_obj}\n')
+                    else:
+                        save_file.write(f'Different local vars {name}\n{type(obj)}: {_obj} and\n'
+                                        f'{type(self.bug_info.local_vars[name])}: {self.bug_info.local_vars[name]}\n')
                 else:
                     is_same=False
-                if not is_same:
-                    break
+                # if not is_same:
+                #     break
             except ValueError:
                 print(f'Cannot pickle {name}: {obj}')
                 continue
 
-        if is_same and not self.skip_global:
+        # if is_same and not self.skip_global:
+        if not self.skip_global:
+            save_file.write(f'-----------------------\nGlobal vars:\n')
             print('Compare global variables...')
             for name,obj in global_vars.items():
                 if is_default_global(self.fn,name,obj):
@@ -253,15 +282,25 @@ class RepairloopRunner:
                 if name not in self.global_vars_without_default:
                     # is_same=False
                     print(f'New global var {name}: {obj}')
+                    save_file.write(f'New global var {name}: {type(obj)}: {pickle_object(self.fn,name,obj)}\n')
                     break
                 _obj=pickle_object(self.fn,name,obj)
                 if _obj is not None:
-                    is_same=compare_object(_obj,self.global_vars_without_default[name])
+                    _is_same=compare_object(_obj,self.global_vars_without_default[name])
+                    if is_same:
+                        is_same=_is_same
+                    if _is_same:
+                        save_file.write(f'Same global vars {name}: {type(obj)}: {_obj}\n')
+                    else:
+                        save_file.write(f'Different global vars {name}\n{type(obj)}: {_obj} and\n'
+                                        f'{type(self.global_vars_without_default[name])}: {self.global_vars_without_default[name]}\n')
                 else:
                     is_same=False
-                if not is_same:
-                    break
+                # if not is_same:
+                #     break
 
+        save_file.write('\n')
+        save_file.close()
         if is_same:
             print(f'Same result!')
         else:
@@ -269,35 +308,19 @@ class RepairloopRunner:
 
         return is_same
     
-def find_func(vars:Dict[str,object],func_name:str,lineno:int) -> Union[FunctionType,MethodType]:
-    max_lineno=0
-    func:Union[FunctionType,MethodType]=None
-    for k,v in vars.items():
-        if (isinstance(v,FunctionType) or isinstance(v,MethodType)) and k==func_name and \
-                v.__code__.co_firstlineno<=lineno and max_lineno<v.__code__.co_firstlineno:
-            func=v
-            max_lineno=v.__code__.co_firstlineno
-        elif hasattr(v,'__dict__'):
-            _func=find_func(v.__dict__,func_name,lineno)
-            if _func is not None and max_lineno<_func.__code__.co_firstlineno:
-                func=_func
-                max_lineno=_func.__code__.co_firstlineno
-
-    return func
-
 def except_handler(e:Exception):
     innerframes=inspect.getinnerframes(e.__traceback__)
     info:inspect.FrameInfo=innerframes[0]
     inner_info:inspect.FrameInfo=innerframes[1]
     f=info.frame
     
-    locals=f.f_locals.copy()
-    globals=f.f_globals.copy()
-    func:Union[FunctionType,MethodType]=find_func(locals,inner_info.function,inner_info.lineno)
-    if func is None:
-        func=find_func(globals,inner_info.function,inner_info.lineno)
+    objects=gc.get_referrers(inner_info.frame.f_code)
+    for obj in objects:
+        if isinstance(obj,FunctionType) and obj.__name__==inner_info.function:
+            func=obj
+            break
     
-    assert func is not None
+    assert func is not None,f'Cannot find function {inner_info.function} at line {inner_info.lineno}'
 
     with open(inner_info.filename,'r') as file:
         func_ast=ast.parse(file.read(),inner_info.filename,'exec')

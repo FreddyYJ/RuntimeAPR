@@ -124,7 +124,7 @@ class RuntimeAPRFileMatcher:
                 return False
 
         if self.sources:
-            return any(s in filename.parents for s in self.sources)
+            return any(s==filename or s in filename.parents for s in self.sources)
 
         if any(p in self.pylib_paths for p in filename.parents):
             return False
