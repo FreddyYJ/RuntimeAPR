@@ -96,7 +96,7 @@ def pickle_object(fn:FunctionType,name:str,obj:object,is_global=False):
 
         for i,child in enumerate(obj):
             __stack+=1
-            child_obj=pickle_object(fn,f'{name}[{i}]',child)
+            child_obj=pickle_object(fn,f'{name}[{i}]',child,is_global=is_global)
             __stack-=1
             pickled_obj.children[f'{name}[{i}]']=child_obj
         return pickled_obj
@@ -112,7 +112,7 @@ def pickle_object(fn:FunctionType,name:str,obj:object,is_global=False):
                     continue
                 else:
                     __stack+=1
-                    attr_obj=pickle_object(fn,attr,getattr(obj,attr))
+                    attr_obj=pickle_object(fn,attr,getattr(obj,attr),is_global=is_global)
                     __stack-=1
                     if attr_obj is not None:
                         pickled_obj.children[attr]=attr_obj

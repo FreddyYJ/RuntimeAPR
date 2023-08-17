@@ -206,7 +206,7 @@ class RepairloopRunner:
         except Exception as e:
             tb=e.__traceback__
             info=inspect.getinnerframes(tb)[1]
-            return prune_default_local_var(info.frame.f_locals), prune_default_global_var(self.fn,info.frame.f_globals)
+            return prune_default_local_var(self.fn,info.frame.f_locals), prune_default_global_var(self.fn,info.frame.f_globals)
 
         return (dict(),dict())
     
@@ -288,9 +288,9 @@ class RepairloopRunner:
                 if name not in self.global_vars_without_default:
                     # is_same=False
                     print(f'New global var {name}: {obj}')
-                    save_file.write(f'New global var {name}: {type(obj)}: {pickle_object(self.fn,name,obj)}\n')
+                    save_file.write(f'New global var {name}: {type(obj)}: {pickle_object(self.fn,name,obj,is_global=True)}\n')
                     break
-                _obj=pickle_object(self.fn,name,obj)
+                _obj=pickle_object(self.fn,name,obj,is_global=True)
                 if _obj is not None:
                     _is_same=compare_object(_obj,self.global_vars_without_default[name])
                     if is_same:
@@ -383,12 +383,12 @@ def except_handler(e:Exception):
     print(f'Kwargs: {kwonlys}')
     bug_info=BugInformation(inner_info.lineno,inner_info.function,
                             inner_info.frame.f_locals.copy(),inner_info.frame.f_globals.copy())
-    for name,obj in prune_default_local_var(inner_info.frame.f_locals.copy()).items():
+    for name,obj in prune_default_local_var(func,inner_info.frame.f_locals.copy()).items():
         _obj=pickle_object(func,name,obj)
         if _obj is not None:
             bug_info.local_vars[name]=_obj
     for name,obj in prune_default_global_var(func,inner_info.frame.f_globals.copy()).items():
-        _obj=pickle_object(func,name,obj)
+        _obj=pickle_object(func,name,obj,is_global=True)
         if _obj is not None:
             bug_info.global_vars[name]=_obj
     runner=RepairloopRunner(func,(pos_only+norms+vargs),kwonlys,bug_info)
