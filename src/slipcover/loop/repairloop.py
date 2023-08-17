@@ -10,7 +10,7 @@ from bytecode import Bytecode
 import gc
 
 from .funcast import FunctionFinderVisitor
-from .repairutils import BugInformation,prune_default_global_var,is_default_global,compare_object,pickle_object
+from .repairutils import BugInformation,prune_default_global_var,is_default_global,compare_object,pickle_object,prune_default_local_var,is_default_local
 from ..concolic import ConcolicTracer,get_zvalue,zint,symbolize,ControlDependenceGraph,Block,ConditionTree,ConditionNode
 
 import pickle
@@ -29,6 +29,7 @@ class RepairloopRunner:
         self.kwargs=kwargs
         self.bug_info=bug_info
         self.global_vars_without_default=prune_default_global_var(fn,bug_info.global_vars)
+        self.local_vars_without_default=prune_default_local_var(fn,bug_info.local_vars)
         self.tried_paths:Set[z3.ExprRef]=set()
         self.persistent_path:Set[z3.BoolRef]=set()
         print(f'Global vars: {self.global_vars_without_default}')
@@ -55,7 +56,11 @@ class RepairloopRunner:
             # Symbolize the arguments
             new_args=list(self.args)
             arg_names=list(inspect.signature(self.fn).parameters.keys())
+            local_vars=dict()
             for name,obj in zip(arg_names,self.args):
+                local_vars[name]=obj
+            pruned_locals=prune_default_local_var(self.fn,local_vars)
+            for name,obj in pruned_locals.items():
                 new_args[arg_names.index(name)]=symbolize(tracer.context,name,obj,before_values)
 
             # Symbolize the global variables
@@ -201,7 +206,7 @@ class RepairloopRunner:
         except Exception as e:
             tb=e.__traceback__
             info=inspect.getinnerframes(tb)[1]
-            return info.frame.f_locals, prune_default_global_var(self.fn,info.frame.f_globals)
+            return prune_default_local_var(info.frame.f_locals), prune_default_global_var(self.fn,info.frame.f_globals)
 
         return (dict(),dict())
     
@@ -248,30 +253,29 @@ class RepairloopRunner:
         save_file.write(f'Local vars:\n')
         print('Compare local variables...')
         for name,obj in local_vars.items():
-            try:
-                if name not in self.bug_info.local_vars:
-                    is_same=False
-                    print(f'New local var {name}: {obj}')
-                    save_file.write(f'New local var {name}: {type(obj)}: {pickle_object(self.fn,name,obj)}\n')
-                    break
-                
-                _obj=pickle_object(self.fn,name,obj)
-                if _obj is not None:
-                    _is_same=compare_object(_obj,self.bug_info.local_vars[name])
-                    if is_same:
-                        is_same=_is_same
-                    if _is_same:
-                        save_file.write(f'Same local vars {name}: {type(obj)}: {_obj}\n')
-                    else:
-                        save_file.write(f'Different local vars {name}\n{type(obj)}: {_obj} and\n'
-                                        f'{type(self.bug_info.local_vars[name])}: {self.bug_info.local_vars[name]}\n')
-                else:
-                    is_same=False
-                # if not is_same:
-                #     break
-            except ValueError:
-                print(f'Cannot pickle {name}: {obj}')
+            if is_default_local(self.fn,name,obj):
                 continue
+
+            if name not in self.local_vars_without_default:
+                is_same=False
+                print(f'New local var {name}: {obj}')
+                save_file.write(f'New local var {name}: {type(obj)}: {pickle_object(self.fn,name,obj)}\n')
+                break
+            
+            _obj=pickle_object(self.fn,name,obj)
+            if _obj is not None:
+                _is_same=compare_object(_obj,self.local_vars_without_default[name])
+                if is_same:
+                    is_same=_is_same
+                if _is_same:
+                    save_file.write(f'Same local vars {name}: {type(obj)}: {_obj}\n')
+                else:
+                    save_file.write(f'Different local vars {name}\n{type(obj)}: {_obj} and\n'
+                                    f'{type(self.local_vars_without_default[name])}: {self.local_vars_without_default[name]}\n')
+            else:
+                is_same=False
+            # if not is_same:
+            #     break
 
         # if is_same and not self.skip_global:
         if not self.skip_global:
@@ -379,7 +383,7 @@ def except_handler(e:Exception):
     print(f'Kwargs: {kwonlys}')
     bug_info=BugInformation(inner_info.lineno,inner_info.function,
                             inner_info.frame.f_locals.copy(),inner_info.frame.f_globals.copy())
-    for name,obj in inner_info.frame.f_locals.copy().items():
+    for name,obj in prune_default_local_var(inner_info.frame.f_locals.copy()).items():
         _obj=pickle_object(func,name,obj)
         if _obj is not None:
             bug_info.local_vars[name]=_obj

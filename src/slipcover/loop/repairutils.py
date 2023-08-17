@@ -42,6 +42,26 @@ def prune_default_global_var(fn,global_vars:Dict[str,Any]):
     
     return output
 
+def is_default_local(fn:FunctionType,name,obj):
+    if name=='_sc_e':
+        return True
+    elif inspect.isfunction(obj) or inspect.ismodule(obj) or inspect.ismethod(obj) or inspect.isclass(obj):
+        return True
+    elif '_lru_cache_wrapper' in str(type(obj)):
+        return True
+    
+    if name==fn.__name__:
+        return True
+    return False
+
+def prune_default_local_var(fn,local_vars:Dict[str,Any]):
+    output=dict()
+    for name,obj in local_vars.items():
+        if not is_default_local(fn,name,obj):
+            output[name]=obj
+    
+    return output
+
 class PickledObject:
     def __init__(self,name,data=b'') -> None:
         self.name:str=name
@@ -59,7 +79,7 @@ class PickledObject:
 
 __stack=0
 
-def pickle_object(fn:FunctionType,name:str,obj:object):
+def pickle_object(fn:FunctionType,name:str,obj:object,is_global=False):
     global __stack
     if type(obj) in (zbool,zint,zstr,zfloat):
         return PickledObject(name,pickle.dumps(obj.v))
@@ -87,7 +107,8 @@ def pickle_object(fn:FunctionType,name:str,obj:object):
         except pickle.PicklingError:
             pickled_obj=PickledObject(name)
             for attr in dir(obj):
-                if is_default_global(fn,attr,getattr(obj,attr)):
+                if (is_global and is_default_global(fn,attr,getattr(obj,attr))) or \
+                        (not is_global and is_default_local(fn,attr,getattr(obj,attr))):
                     continue
                 else:
                     __stack+=1
