@@ -191,31 +191,28 @@ class ConditionTree:
             # Try True branch first
             if self.true_entry.condition is not None:
                 paths.append(self.true_entry.condition)
-            res=self.__visit_path_dfs(self.true_entry,paths)
-        elif self.true_entry is not None and self.false_entry is None:
+            if self.__visit_path_dfs(self.true_entry,paths):
+                return paths
+        if self.true_entry is not None and self.false_entry is None:
             # Only True branch exist, but unreachable
             if self.true_entry.condition is not None:
                 return [z3.Not(self.true_entry.condition)]
             else:
                 return []
 
-        if res:
-            return paths
-
         if self.false_entry is not None and self.false_entry.reachable:
             # Try False branch if True branch is none or failed to find path
             if self.false_entry.condition is not None:
                 paths.append(self.false_entry.condition)
-            res=self.__visit_path_dfs(self.false_entry,paths)
+            if self.__visit_path_dfs(self.false_entry,paths):
+                return paths
         else:
             # Only False branch exist, but unreachable
             if self.false_entry.condition is not None:
                 return [self.false_entry.condition.arg(0)]
             else:
                 return []
-        if res:
-            return paths
-        
+                    
         # True is none and failed to find path in false
         assert self.true_entry is None,f'Both branches are None'
         if self.false_entry.condition is not None:

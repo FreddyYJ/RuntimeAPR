@@ -316,8 +316,7 @@ class RepairloopRunner:
     
 def except_handler(e:Exception):
     innerframes=inspect.getinnerframes(e.__traceback__)
-    info:inspect.FrameInfo=innerframes[0]
-    inner_info:inspect.FrameInfo=innerframes[1]
+    inner_info:inspect.FrameInfo=innerframes[-1]
     
     objects=gc.get_referrers(inner_info.frame.f_code)
     for obj in objects:
