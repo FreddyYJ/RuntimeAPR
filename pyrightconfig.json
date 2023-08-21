@@ -1,0 +1,21 @@
+{
+    "exclude": [
+        "benchmarks/ansible",
+        "benchmarks/black",
+        "benchmarks/cookiecutter",
+        "benchmarks/fastapi",
+        "benchmarks/httpie",
+        "benchmarks/keras",
+        "benchmarks/luigi",
+        "benchmarks/matplotlib",
+        "benchmarks/pandas",
+        "benchmarks/PySnooper",
+        "benchmarks/sanic",
+        "benchmarks/scrapy",
+        "benchmarks/spacy",
+        "benchmarks/thefuck",
+        "benchmarks/tornado",
+        "benchmarks/tqdm",
+        "benchmarks/youtube-dl"
+    ]
+}

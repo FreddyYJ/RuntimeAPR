@@ -12,5 +12,4 @@ benchmarks/*
 !benchmarks/*.py
 !benchmarks/diffs
 !benchmarks/requirements.txt
-pyrightconfig.json
 **/object.txt
