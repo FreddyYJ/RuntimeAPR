@@ -15,7 +15,7 @@ def test(subject:str,version:str):
         print(f'{subject}-{version} compile success, running tests')
 
     # Run tests
-    result=subprocess.run(['bugsinpy-test','-a'],stdout=subprocess.PIPE,stderr=subprocess.STDOUT,
+    result=subprocess.run(['bugsinpy-test'],stdout=subprocess.PIPE,stderr=subprocess.STDOUT,
                           cwd=f'/root/project/RuntimeAPR/benchmarks/{subject}/{subject}-{version}/{subject}')
     
     # Store the output in the test.log file
@@ -44,7 +44,7 @@ def test_fixed(subject:str,version:str):
         print(f'{subject}-{version}f compile success, running tests')
 
     # Run tests
-    result=subprocess.run(['bugsinpy-test','-a'],stdout=subprocess.PIPE,stderr=subprocess.STDOUT,
+    result=subprocess.run(['bugsinpy-test','a'],stdout=subprocess.PIPE,stderr=subprocess.STDOUT,
                           cwd=f'/root/project/RuntimeAPR/benchmarks/{subject}/{subject}-{version}f/{subject}')
     
     # Store the output in the test.log file
@@ -62,11 +62,11 @@ def test_fixed(subject:str,version:str):
 import benchmark
 import multiprocessing as mp
 
-pool=mp.Pool(30)
+pool=mp.Pool(1)
 
 for sub in benchmark.SUBJECTS:
     for i in range(1,benchmark.BUGS_NUMBER[sub]+1):
-        if (sub,i) not in benchmark.EXCEPT_BUGS:
+        # if (sub,i) not in benchmark.EXCEPT_BUGS:
             pool.apply_async(test,args=(sub,i,))
             # pool.apply_async(test_fixed,args=(sub,i,))
 

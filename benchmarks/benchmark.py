@@ -23,5 +23,5 @@ BUGS_NUMBER={
 }
 
 EXCEPT_BUGS=(('cookiecutter',1),('cookiecutter',2),('cookiecutter',3),('cookiecutter',4),  # cookiecutter: Add PYTHONPATH to .bashrc
-             ('PySnooper',1),('PySnooper',2),('PySnooper',3),  # PySnooper: Import error
+             ('PySnooper',2),  # PySnooper: Import error
              )
