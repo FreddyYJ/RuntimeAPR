@@ -22,6 +22,7 @@ BUGS_NUMBER={
     'youtube-dl':43
 }
 
-EXCEPT_BUGS=(('cookiecutter',1),('cookiecutter',2),('cookiecutter',3),('cookiecutter',4),  # cookiecutter: Add PYTHONPATH to .bashrc
+EXCEPT_BUGS=(('black',21),('sanic',2),('scrapy',7),('tornado',3),  # Not reproducible bugs
+    ('cookiecutter',1),('cookiecutter',2),('cookiecutter',3),('cookiecutter',4),  # cookiecutter: lsb_release module not work if python is installed manually
              ('PySnooper',2),  # PySnooper: Import error
              )
