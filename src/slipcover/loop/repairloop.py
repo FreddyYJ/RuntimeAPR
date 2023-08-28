@@ -11,7 +11,7 @@ import gc
 
 from .funcast import FunctionFinderVisitor
 from .repairutils import BugInformation,prune_default_global_var,is_default_global,compare_object,pickle_object,prune_default_local_var,is_default_local
-from ..concolic import ConcolicTracer,get_zvalue,zint,symbolize,ControlDependenceGraph,Block,ConditionTree,ConditionNode
+from ..concolic import ConcolicTracer,get_zvalue,zint,symbolize,ControlDependenceGraph,Block,ConditionTree,ConditionNode,DefUseGraph
 
 import pickle
 
@@ -34,6 +34,7 @@ class RepairloopRunner:
         self.persistent_path:Set[z3.BoolRef]=set()
         print(f'Global vars: {self.global_vars_without_default}')
         self.cfg=ControlDependenceGraph(self.fn)
+        self.def_use_graph:DefUseGraph=DefUseGraph(self.fn)
         self.cond_tree:ConditionTree=ConditionTree(self.cfg.cfg)
         self.skip_global:bool=False # Skip global variables
 

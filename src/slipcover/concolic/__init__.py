@@ -4,3 +4,4 @@ from .ExpectError import ExpectError
 from .cfg import ControlDependenceGraph
 from .model import CFG,Block
 from .condtree import ConditionTree,ConditionNode
+from .defusegraph import DefUseGraph
