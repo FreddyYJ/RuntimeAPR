@@ -98,7 +98,9 @@ setuptools.setup(
         "astor",
         "py2cfg",
         "graphviz",
-        "typing-extensions"
+        "typing-extensions",
+        "beniget",
+        "gast"
     ],
     classifiers=[
         "Programming Language :: Python :: 3.8",
