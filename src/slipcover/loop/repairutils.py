@@ -96,7 +96,7 @@ def pickle_object(fn:FunctionType,name:str,obj:object,is_global=False):
             data=pickle.dumps(obj)
             return PickledObject(name,data,obj)
         except pickle.PicklingError:
-            pickled_obj=PickledObject(name)
+            pickled_obj=PickledObject(name,orig_data=obj)
             for attr in dir(obj):
                 if (is_global and is_default_global(fn,attr,getattr(obj,attr))) or \
                         (not is_global and is_default_local(fn,attr,getattr(obj,attr))):
