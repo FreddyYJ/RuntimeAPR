@@ -12,8 +12,7 @@ import gc
 from .funcast import FunctionFinderVisitor
 from .repairutils import BugInformation,prune_default_global_var,is_default_global,compare_object,pickle_object,prune_default_local_var,is_default_local
 from ..concolic import ConcolicTracer,get_zvalue,zint,symbolize,ControlDependenceGraph,Block,ConditionTree,ConditionNode,DefUseGraph
-
-import pickle
+from ..configure import Configure
 
 class RepairloopRunner:
     def __init__(self, fn:FunctionType, args, kwargs, bug_info:BugInformation):
@@ -32,7 +31,8 @@ class RepairloopRunner:
         self.local_vars_without_default=prune_default_local_var(fn,bug_info.local_vars)
         self.tried_paths:Set[z3.ExprRef]=set()
         self.persistent_path:Set[z3.BoolRef]=set()
-        print(f'Global vars: {self.global_vars_without_default}')
+        if Configure.debug:
+            print(f'Global vars: {self.global_vars_without_default}')
         self.cfg=ControlDependenceGraph(self.fn)
         self.def_use_graph:DefUseGraph=DefUseGraph(self.fn)
         self.cond_tree:ConditionTree=ConditionTree(self.cfg.cfg)
@@ -74,25 +74,26 @@ class RepairloopRunner:
                 for name,obj in new_globals.items():
                     self.fn.__globals__[name]=obj
 
-            print(f'original args: {self.args}')
-            print(f'args: {new_args}')
-            if not self.skip_global:
-                print('original globals: ',end='{')
-                for k,v in prune_default_global_var(self.fn,self.fn.__globals__).items():
-                    try:
-                        print(f'{k}: {v}',end=', ')
-                    except IndexError:
-                        # Terrible index error when converting object to str
-                        print(f'{k}: Unparsed {type(v)}',end=', ')
-                print('}')
-                print('globals: ',end='{')
-                for k,v in prune_default_global_var(self.fn,new_globals).items():
-                    try:
-                        print(f'{k}: {v}',end=', ')
-                    except IndexError:
-                        # Terrible index error when converting object to str
-                        print(f'{k}: Unparsed {type(v)}',end=', ')
-                print('}')
+            if Configure.debug:
+                print(f'original args: {self.args}')
+                print(f'args: {new_args}')
+                if not self.skip_global:
+                    print('original globals: ',end='{')
+                    for k,v in prune_default_global_var(self.fn,self.fn.__globals__).items():
+                        try:
+                            print(f'{k}: {v}',end=', ')
+                        except IndexError:
+                            # Terrible index error when converting object to str
+                            print(f'{k}: Unparsed {type(v)}',end=', ')
+                    print('}')
+                    print('globals: ',end='{')
+                    for k,v in prune_default_global_var(self.fn,new_globals).items():
+                        try:
+                            print(f'{k}: {v}',end=', ')
+                        except IndexError:
+                            # Terrible index error when converting object to str
+                            print(f'{k}: Unparsed {type(v)}',end=', ')
+                    print('}')
 
             try:
                 sys.settrace(self.traceit)
@@ -100,14 +101,16 @@ class RepairloopRunner:
                 sys.settrace(None)
             except Exception as _exc:
                 sys.settrace(None)
-                print(f'Decls: {tracer.decls}')
+                if Configure.debug:
+                    print(f'Decls: {tracer.decls}')
                 print(f'Path: {tracer.path}')
 
                 tb=_exc.__traceback__
                 info=inspect.getinnerframes(tb)[1]
                 return tracer.path,info.frame.f_locals,info.frame.f_globals
             
-            print(f'Decls: {tracer.decls}')
+            if Configure.debug:
+                print(f'Decls: {tracer.decls}')
             print(f'Path: {tracer.path}')
             # self.tried_paths.add(z3.simplify(z3.And(*tracer.path)))
             return tracer.path,self.target_locals,self.target_globals

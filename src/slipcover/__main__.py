@@ -19,6 +19,7 @@ import platform
 import argparse
 
 from . import Instrumenter, RuntimeAPRFileMatcher,RuntimeAPRImportManager
+from .configure import Configure
 
 ap = argparse.ArgumentParser(prog='slipcover')
 ap.add_argument('--branch', action='store_true', help="measure both branch and line coverage")
@@ -61,6 +62,8 @@ else:
 base_path = Path(args.script).resolve().parent if args.script \
             else Path('.').resolve()
 
+if args.debug:
+    Configure.debug=True
 
 if args.original_sc:
     file_matcher = sc.FileMatcher()
