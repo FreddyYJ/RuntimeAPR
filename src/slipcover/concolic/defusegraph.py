@@ -44,7 +44,8 @@ class DefUseGraph:
 
     def __init__(self,fn:FunctionType) -> None:
         filename=fn.__code__.co_filename
-        tree=ast.parse(open(filename).read())
+        with open(filename,'r') as f:
+            tree=ast.parse(f.read())
         func_finder=FunctionDefFinder(fn.__name__,fn.__code__.co_firstlineno)
         func_finder.visit(tree)
         self.func_def=func_finder.definition
@@ -56,7 +57,11 @@ class DefUseGraph:
         self.bodies:List[DefUseGraph.Node]=[]
         for define in self.chains:
             use=self.chains[define]
-            if use.node.lineno<self.func_def.lineno or use.node.end_lineno>self.func_def.end_lineno:
+            if not isinstance(use.node,ast.AST) or not hasattr(use.node,'lineno') or use.node.lineno is None:
+                # AST node has None lineno, just skip it
+                continue
+            if use.node.lineno<self.func_def.lineno or \
+                    use.node.end_lineno>self.func_def.end_lineno:
                 continue
             self._gen_graph(use)
 
@@ -80,6 +85,9 @@ class DefUseGraph:
         if cur_node not in self.bodies:
             # Update children
             for child in use.users():
+                if not isinstance(child.node,ast.AST) or not hasattr(child.node,'lineno') or child.node.lineno is None:
+                    # AST node has None lineno, just skip it
+                    continue
                 if child.node.lineno<self.func_def.lineno or child.node.end_lineno>self.func_def.end_lineno:
                     continue
                 child_node=self._gen_graph(child)
