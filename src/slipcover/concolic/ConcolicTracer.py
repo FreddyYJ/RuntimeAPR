@@ -157,6 +157,9 @@ class zbool:
         pred.cond_lineno=current_frame.lineno
         self.path.append(pred)
         return r
+    
+    def __hash__(self) -> int:
+        return hash(self.v)
 
 class zint(int):
     def __new__(cls, context, zn, v, *args, **kw):
@@ -216,6 +219,9 @@ class zint(int):
         if self != 0:
             return True
         return False
+    
+    def __hash__(self) -> int:
+        return super().__hash__()
     
 class zfloat(float):
     def __new__(cls, context, zn, v, *args, **kw):
@@ -278,6 +284,9 @@ class zfloat(float):
         if self != 0:
             return True
         return False
+    
+    def __hash__(self) -> int:
+        return super().__hash__()
 
 
 INT_BINARY_OPS = [
@@ -504,7 +513,7 @@ class zstr(str):
         return self.__eq__(other)
     
     def __len__(self):
-        raise NotImplemented()
+        return len(self.v)
 
     def length(self):
         return self._len
@@ -532,6 +541,9 @@ class zstr(str):
 
     def __iter__(self):
         return zstr_iterator(self.context, self)
+
+    def __hash__(self):
+        return hash(self.v)
     
     def upper(self):
         empty = ''
@@ -839,7 +851,7 @@ def symbolize(ctxt,name:str,obj:object,before_objs:Dict[str,object]):
         if cur_type==set:
             # Convert set to list and sort it to make it deterministic
             obj=list(obj)
-            obj.sort()
+            # obj.sort()
         elif cur_type==tuple:
             # Convert tuple to list
             obj=list(obj)
