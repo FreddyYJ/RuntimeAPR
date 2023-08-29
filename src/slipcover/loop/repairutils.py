@@ -71,7 +71,10 @@ class PickledObject:
         self.unpickled:str=unpickled
 
         self.type=type(orig_data)
-        self.orig_data_str:str=str(orig_data)
+        try:
+            self.orig_data_str:str=str(orig_data)
+        except:
+            self.orig_data_str:str=''
     
     def __str__(self) -> str:
         if self.data!=b'':
