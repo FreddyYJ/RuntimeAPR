@@ -14,6 +14,8 @@ from .repairutils import BugInformation,prune_default_global_var,is_default_glob
 from ..concolic import ConcolicTracer,get_zvalue,zint,symbolize,ControlDependenceGraph,Block,ConditionTree,ConditionNode,DefUseGraph
 from ..configure import Configure
 
+is_concolic_execution=False
+
 class RepairloopRunner:
     def __init__(self, fn:FunctionType, args, kwargs, bug_info:BugInformation):
         """
@@ -96,6 +98,8 @@ class RepairloopRunner:
                     print('}')
 
             try:
+                global is_concolic_execution
+                is_concolic_execution=True
                 sys.settrace(self.traceit)
                 result=self.fn(*new_args, **self.kwargs)
                 sys.settrace(None)
@@ -336,6 +340,9 @@ class RepairloopRunner:
         return is_same
     
 def except_handler(e:Exception):
+    global is_concolic_execution
+    if is_concolic_execution:
+        raise
     innerframes=inspect.getinnerframes(e.__traceback__)
     inner_info:inspect.FrameInfo=innerframes[-1]
     
