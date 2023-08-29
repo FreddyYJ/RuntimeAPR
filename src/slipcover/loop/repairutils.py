@@ -89,7 +89,7 @@ def pickle_object(fn:FunctionType,name:str,obj:object,is_global=False):
         if cur_type==set:
             # Convert set to list and sort it to make it deterministic
             obj=list(obj)
-            obj.sort()
+            # obj.sort()
         elif cur_type==tuple:
             # Convert tuple to list
             obj=list(obj)
