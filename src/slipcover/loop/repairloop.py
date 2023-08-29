@@ -77,8 +77,22 @@ class RepairloopRunner:
             print(f'original args: {self.args}')
             print(f'args: {new_args}')
             if not self.skip_global:
-                print(f'original globals: {prune_default_global_var(self.fn,self.fn.__globals__)}')
-                print(f'globals: {prune_default_global_var(self.fn,new_globals)}')
+                print('original globals: ',end='{')
+                for k,v in prune_default_global_var(self.fn,self.fn.__globals__).items():
+                    try:
+                        print(f'{k}: {v}',end=', ')
+                    except IndexError:
+                        # Terrible index error when converting object to str
+                        print(f'{k}: Unparsed {type(v)}',end=', ')
+                print('}')
+                print('globals: ',end='{')
+                for k,v in prune_default_global_var(self.fn,new_globals).items():
+                    try:
+                        print(f'{k}: {v}',end=', ')
+                    except IndexError:
+                        # Terrible index error when converting object to str
+                        print(f'{k}: Unparsed {type(v)}',end=', ')
+                print('}')
 
             try:
                 sys.settrace(self.traceit)
@@ -124,7 +138,10 @@ class RepairloopRunner:
                 if isinstance(cur_value,z3.IntNumRef):
                     values[model[i].name()]=cur_value.as_long()
                 elif isinstance(cur_value,z3.BoolRef):
-                    values[model[i].name()]=cur_value.arg(0)
+                    if cur_value.num_args()==0:
+                        values[model[i].name()]=False
+                    else:
+                        values[model[i].name()]=cur_value.arg(0)
                 elif isinstance(cur_value,z3.RatNumRef):
                     values[model[i].name()]=float(cur_value.as_decimal(10))
                 elif isinstance(cur_value,z3.SeqRef):
