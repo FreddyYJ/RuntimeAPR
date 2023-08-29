@@ -72,23 +72,27 @@ class ConditionTree:
                 if len(cfg_node.exits)>=2:
                     self.__visit_to_update(node.false_child,cfg_node.exits[1].target,conditions,cond_index+1)
         elif isinstance(cfg_node.statements[-1],ast.For):
-            next_cond=conditions[cond_index]
-            cond_lineno=next_cond.cond_lineno
-            if cfg_node.statements[-1].lineno<=cond_lineno<=cfg_node.statements[-1].end_lineno:
-                # Go to body
-                if node.true_child is None:
-                    # Create dummy node with None condition
-                    node.true_child=ConditionNode(cfg_node.exits[0].target.at(),None,cfg_node,cfg_node.exits[0].target)
-                self.__visit_to_update(node.true_child,cfg_node.exits[0].target,conditions,cond_index)
-            else:
-                # Exit for statement
-                if node.false_child is None:
+            if cond_index<len(conditions):
+                next_cond=conditions[cond_index]
+                cond_lineno=next_cond.cond_lineno
+                if cfg_node.statements[-1].lineno<=cond_lineno<=cfg_node.statements[-1].end_lineno:
+                    # Go to body
+                    if node.true_child is None:
+                        # Create dummy node with None condition
+                        node.true_child=ConditionNode(cfg_node.exits[0].target.at(),None,cfg_node,cfg_node.exits[0].target)
+                    self.__visit_to_update(node.true_child,cfg_node.exits[0].target,conditions,cond_index)
+                else:
+                    # Exit for statement
+                    if node.false_child is None:
+                        if len(cfg_node.exits)>=2:
+                            node.false_child=ConditionNode(cfg_node.exits[1].target.at(),None,cfg_node,cfg_node.exits[1].target)
+                        else:
+                            node.false_child=ConditionNode(-1,None,cfg_node)
                     if len(cfg_node.exits)>=2:
-                        node.false_child=ConditionNode(cfg_node.exits[1].target.at(),None,cfg_node,cfg_node.exits[1].target)
-                    else:
-                        node.false_child=ConditionNode(-1,None,cfg_node)
-                if len(cfg_node.exits)>=2:
-                    self.__visit_to_update(node.false_child,cfg_node.exits[1].target,conditions,cond_index)
+                        self.__visit_to_update(node.false_child,cfg_node.exits[1].target,conditions,cond_index)
+            elif len(cfg_node.exits)>2:
+                # No more condition: body not executed
+                self.__visit_to_update(node,cfg_node.exits[0].target,conditions,cond_index)
         elif len(cfg_node.exits)>0:
             self.__visit_to_update(node,cfg_node.exits[0].target,conditions,cond_index)
 

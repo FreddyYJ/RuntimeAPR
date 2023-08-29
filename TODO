@@ -1,8 +1,4 @@
-slipcover.loop.repairloop, concolic.ConcolicTracer: Add For statement support
-  - We need to consider how much the body is executed
-  - ex: ```
-      for ... in ...:
-            if ...:
-                ...
-        ```
-  - z3-solver cannot handle the conditions inside the for loop
+ansible-10: Cannot intrument test code because slipcover can only instrument accessible code from __init__.py
+black-9
+  - Handle cannot pickled objects
+  - Prune unnecessary objects when comparing states

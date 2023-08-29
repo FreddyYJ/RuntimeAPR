@@ -3,6 +3,7 @@ from types import FunctionType, MethodType, ModuleType
 from typing import Any, Dict, List, Union
 import inspect
 import pickle
+import traceback
 
 from ..concolic import zint,zbool,zstr,zfloat
 
@@ -63,16 +64,23 @@ def prune_default_local_var(fn,local_vars:Dict[str,Any]):
     return output
 
 class PickledObject:
-    def __init__(self,name,data=b'') -> None:
+    def __init__(self,name,data=b'',orig_data=None,unpickled:str='') -> None:
         self.name:str=name
         self.data:Union[bytes,object]=data
         self.children:Dict[str,'PickledObject']=dict()
+        self.unpickled:str=unpickled
+
+        # For debugging
+        self.type=type(orig_data)
+        self.orig_data_str:str=str(orig_data)
     
     def __str__(self) -> str:
         if self.data!=b'':
-            return f'{self.name}: {self.data}'
+            return f'{self.name} (pickled): {self.orig_data_str} :::: {self.data}'
+        elif self.unpickled!='':
+            return f'{self.name} (cannot pickled): {self.unpickled}'
         else:
-            string=f'{self.name}:\n'
+            string=f'{self.name} (not pickled):\n'
             for name,child in self.children.items():
                 string+=f'\t{name}: {child}\n'
             return string
@@ -82,28 +90,11 @@ __stack=0
 def pickle_object(fn:FunctionType,name:str,obj:object,is_global=False):
     global __stack
     if type(obj) in (zbool,zint,zstr,zfloat):
-        return PickledObject(name,pickle.dumps(obj.v))
-    elif type(obj) in (list,set,tuple):
-        pickled_obj=PickledObject(name)
-        cur_type=type(obj)
-        if cur_type==set:
-            # Convert set to list and sort it to make it deterministic
-            obj=list(obj)
-            # obj.sort()
-        elif cur_type==tuple:
-            # Convert tuple to list
-            obj=list(obj)
-
-        for i,child in enumerate(obj):
-            __stack+=1
-            child_obj=pickle_object(fn,f'{name}[{i}]',child,is_global=is_global)
-            __stack-=1
-            pickled_obj.children[f'{name}[{i}]']=child_obj
-        return pickled_obj
+        return PickledObject(name,pickle.dumps(obj.v),obj.v)
     else:
         try:
             data=pickle.dumps(obj)
-            return PickledObject(name,data)
+            return PickledObject(name,data,obj)
         except pickle.PicklingError:
             pickled_obj=PickledObject(name)
             for attr in dir(obj):
@@ -117,9 +108,9 @@ def pickle_object(fn:FunctionType,name:str,obj:object,is_global=False):
                     if attr_obj is not None:
                         pickled_obj.children[attr]=attr_obj
             return pickled_obj
-        except Exception:
+        except Exception as e:
             # ctypes objects cannot be pickled, use object directly
-            return PickledObject(name)
+            return PickledObject(name,unpickled=f'{type(e)}: {e}')
         
 def compare_object(a:PickledObject,b:PickledObject):
     if a.data!=b.data:

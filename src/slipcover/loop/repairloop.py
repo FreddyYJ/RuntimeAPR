@@ -291,8 +291,8 @@ class RepairloopRunner:
                 if _is_same:
                     save_file.write(f'Same local vars {name}: {type(obj)}: {_obj}\n')
                 else:
-                    save_file.write(f'Different local vars {name}\n{type(obj)}: {_obj} and\n'
-                                    f'{type(self.local_vars_without_default[name])}: {self.local_vars_without_default[name]}\n')
+                    save_file.write(f'Different local vars {name}\n{_obj.type}: {_obj} and\n'
+                                    f'{self.local_vars_without_default[name].type}: {self.local_vars_without_default[name]}\n')
             else:
                 is_same=False
             # if not is_same:
@@ -319,8 +319,8 @@ class RepairloopRunner:
                     if _is_same:
                         save_file.write(f'Same global vars {name}: {type(obj)}: {_obj}\n')
                     else:
-                        save_file.write(f'Different global vars {name}\n{type(obj)}: {_obj} and\n'
-                                        f'{type(self.global_vars_without_default[name])}: {self.global_vars_without_default[name]}\n')
+                        save_file.write(f'Different global vars {name}\n{_obj.type}: {_obj} and\n'
+                                        f'{self.global_vars_without_default[name].type}: {self.global_vars_without_default[name]}\n')
                 else:
                     is_same=False
                 # if not is_same:
