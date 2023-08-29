@@ -3,7 +3,7 @@ from types import FunctionType, MethodType, ModuleType
 from typing import Any, Dict, List, Union
 import inspect
 import pickle
-import traceback
+from functools import partial
 
 from ..concolic import zint,zbool,zstr,zfloat
 
@@ -70,7 +70,6 @@ class PickledObject:
         self.children:Dict[str,'PickledObject']=dict()
         self.unpickled:str=unpickled
 
-        # For debugging
         self.type=type(orig_data)
         self.orig_data_str:str=str(orig_data)
     
@@ -110,10 +109,16 @@ def pickle_object(fn:FunctionType,name:str,obj:object,is_global=False):
             return pickled_obj
         except Exception as e:
             # ctypes objects cannot be pickled, use object directly
-            return PickledObject(name,unpickled=f'{type(e)}: {e}')
+            return PickledObject(name,orig_data=obj,unpickled=f'{type(e)}: {e}')
         
 def compare_object(a:PickledObject,b:PickledObject):
-    if a.data!=b.data:
+    if a.type==partial and b.type==partial:
+        # functools.partial is same as function
+        return True
+    elif a.unpickled!='' or b.unpickled!='':
+        # Just check type if one of them cannot pickled
+        return a.type==b.type
+    elif a.data!=b.data:
         # Different pickled data
         return False
     else:

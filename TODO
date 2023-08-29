@@ -1,5 +1,4 @@
 ansible-10: Cannot intrument test code because slipcover can only instrument accessible code from __init__.py
 black-9
-  - Handle cannot pickled objects: ctypes objects that contain pointers
+  - Handle cannot pickled objects: ctypes objects that contain pointers (just check type for now)
   - Prune unnecessary objects when comparing states
-  - Handle functools.partial object (same as FunctionType)
