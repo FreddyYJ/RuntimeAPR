@@ -160,6 +160,12 @@ class zbool:
     
     def __hash__(self) -> int:
         return hash(self.v)
+    
+    def __copy__(self):
+        return zbool.create(self.context, self.z, self.v)
+    
+    def __deepcopy__(self,memo=None):
+        return zbool.create(self.context, self.z, self.v)
 
 class zint(int):
     def __new__(cls, context, zn, v, *args, **kw):
@@ -222,6 +228,12 @@ class zint(int):
     
     def __hash__(self) -> int:
         return super().__hash__()
+    
+    def __copy__(self):
+        return zint.create(self.context, self.z, self.v)
+    
+    def __deepcopy__(self,memo=None):
+        return zint.create(self.context, self.z, self.v)
     
 class zfloat(float):
     def __new__(cls, context, zn, v, *args, **kw):
@@ -287,6 +299,12 @@ class zfloat(float):
     
     def __hash__(self) -> int:
         return super().__hash__()
+    
+    def __copy__(self):
+        return zfloat.create(self.context, self.z, self.v)
+    
+    def __deepcopy__(self,memo=None):
+        return zfloat.create(self.context, self.z, self.v)
 
 
 INT_BINARY_OPS = [
@@ -545,8 +563,11 @@ class zstr(str):
     def __hash__(self):
         return hash(self.v)
     
-    def __getstate__(self):
-        return None
+    def __copy__(self):
+        return zstr.create(self.context, self.z, self.v)
+    
+    def __deepcopy__(self,memo=None):
+        return zstr.create(self.context, self.z, self.v)
     
     def encode(self, encoding='utf-8', errors='strict'):
         return self.v.encode(encoding, errors)
