@@ -193,7 +193,7 @@ class RepairloopRunner:
                 # Combine all paths into multiple Ands
                 simple_path=z3.simplify(z3.And(*cur_paths))
 
-                self.cond_tree.update_unreachable_conds(self.bug_info.buggy_line)
+                # self.cond_tree.update_unreachable_conds(self.bug_info.buggy_line)
                 print(f'Condition tree:\n{self.cond_tree}')
 
                 before_values=None
