@@ -1,6 +1,6 @@
 import dataclasses
 from types import FunctionType, MethodType, ModuleType
-from typing import Any, Dict, List, Union
+from typing import Any, Dict, List, Set, Union
 import inspect
 import pickle
 from functools import partial
@@ -30,6 +30,10 @@ def is_default_global(fn:FunctionType,name,obj):
         return True
     elif '_lru_cache_wrapper' in str(type(obj)):
         return True
+    elif 'method-wrapper' in str(type(obj)):
+        return True
+    elif 'builtin_function_or_method' in str(type(obj)):
+        return True
     
     if name==fn.__name__:
         return True
@@ -49,6 +53,10 @@ def is_default_local(fn:FunctionType,name,obj):
     elif inspect.isfunction(obj) or inspect.ismodule(obj) or inspect.ismethod(obj) or inspect.isclass(obj):
         return True
     elif '_lru_cache_wrapper' in str(type(obj)):
+        return True
+    elif 'method-wrapper' in str(type(obj)):
+        return True
+    elif 'builtin_function_or_method' in str(type(obj)):
         return True
     
     if name==fn.__name__:
@@ -87,25 +95,50 @@ class PickledObject:
                 string+=f'\t{name}: {child}\n'
             return string
 
-__stack=0
+class SetObject(PickledObject):
+    def __init__(self, name,orig_data=None) -> None:
+        super().__init__(name,orig_data=orig_data)
+        self.type=set
+        self.elements:Set[PickledObject]=set()
 
-def pickle_object(fn:FunctionType,name:str,obj:object,is_global=False):
+    def __str__(self) -> str:
+        return f'{self.name} (set): {self.elements}'
+    
+__stack=0
+pickle._Pickler.dispatch[zint]=pickle._Pickler.dispatch[int]
+pickle._Pickler.dispatch[zbool]=pickle._Pickler.dispatch[bool]
+pickle._Pickler.dispatch[zstr]=pickle._Pickler.dispatch[str]
+pickle._Pickler.dispatch[zfloat]=pickle._Pickler.dispatch[float]
+pickle.dumps=pickle._dumps
+
+def pickle_object(fn:FunctionType,name:str,obj:object,is_global=False,pickled_ids:Set[int]=set()):
     global __stack
     if type(obj) in (zbool,zint,zstr,zfloat):
+        pickled_ids.add(id(obj.v))
         return PickledObject(name,pickle.dumps(obj.v),obj.v)
+    elif isinstance(obj,set):
+        pickled_obj=SetObject(name,obj)
+        new_set=set()
+        for i,elem in enumerate(list(obj)):
+            new_set.add(pickle_object(fn,i,elem,is_global=is_global,pickled_ids=pickled_ids))
+        pickled_obj.elements=new_set
+        return pickled_obj
     else:
         try:
             data=pickle.dumps(obj)
+            pickled_ids.add(id(obj))
             return PickledObject(name,data,obj)
-        except pickle.PicklingError:
+        except (pickle.PicklingError,ValueError):
             pickled_obj=PickledObject(name,orig_data=obj)
             for attr in dir(obj):
                 if (is_global and is_default_global(fn,attr,getattr(obj,attr))) or \
-                        (not is_global and is_default_local(fn,attr,getattr(obj,attr))):
+                        (not is_global and is_default_local(fn,attr,getattr(obj,attr))) or \
+                        id(getattr(obj,attr)) in pickled_ids:
                     continue
                 else:
                     __stack+=1
-                    attr_obj=pickle_object(fn,attr,getattr(obj,attr),is_global=is_global)
+                    pickled_ids.add(id(getattr(obj,attr)))
+                    attr_obj=pickle_object(fn,attr,getattr(obj,attr),is_global=is_global,pickled_ids=pickled_ids)
                     __stack-=1
                     if attr_obj is not None:
                         pickled_obj.children[attr]=attr_obj
@@ -121,6 +154,21 @@ def compare_object(a:PickledObject,b:PickledObject):
     elif a.unpickled!='' or b.unpickled!='':
         # Just check type if one of them cannot pickled
         return a.type==b.type
+    elif isinstance(a,SetObject) and isinstance(b,SetObject):
+        if len(a.elements)!=len(b.elements):
+            # Different number of elements
+            return False
+        else:
+            # Same number of elements
+            for elem_a in a.elements:
+                found=False
+                for elem_b in b.elements:
+                    if compare_object(elem_a,elem_b):
+                        found=True
+                        break
+                if not found:
+                    return False
+            return True
     elif a.data!=b.data:
         # Different pickled data
         return False

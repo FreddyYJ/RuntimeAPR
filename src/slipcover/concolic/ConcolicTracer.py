@@ -545,6 +545,12 @@ class zstr(str):
     def __hash__(self):
         return hash(self.v)
     
+    def __getstate__(self):
+        return None
+    
+    def encode(self, encoding='utf-8', errors='strict'):
+        return self.v.encode(encoding, errors)
+    
     def upper(self):
         empty = ''
         ne = 'empty_%d' % fresh_name()
