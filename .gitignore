@@ -12,4 +12,4 @@ benchmarks/*
 !benchmarks/*.py
 !benchmarks/diffs
 !benchmarks/requirements.txt
-**/object.txt
+examples/*.txt
