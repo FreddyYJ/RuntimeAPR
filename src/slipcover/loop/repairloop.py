@@ -8,7 +8,6 @@ import ast
 import z3
 from bytecode import Bytecode
 import gc
-from copy import deepcopy,copy
 
 from .funcast import FunctionFinderVisitor
 from .repairutils import BugInformation,prune_default_global_var,is_default_global,compare_object,pickle_object,prune_default_local_var,is_default_local
@@ -27,11 +26,15 @@ class RepairloopRunner:
         :param global_vars: global variables from buggy function
         """
         self.fn=fn
+
+        # For arguments and global variables
         self.args:list=args
         self.kwargs:Dict[str,object]=kwargs
         self.bug_info=bug_info
         self.global_vars_without_default=prune_default_global_var(fn,bug_info.global_vars)
         self.local_vars_without_default=prune_default_local_var(fn,bug_info.local_vars)
+
+        # For concolic execution
         self.tried_paths:Set[z3.ExprRef]=set()
         self.persistent_path:Set[z3.BoolRef]=set()
         if Configure.debug:
@@ -58,7 +61,6 @@ class RepairloopRunner:
         """
         with ConcolicTracer() as tracer:
             # Symbolize the arguments
-            # new_args=list(deepcopy(self.args))
             new_args=list(self.args)
             arg_names=list(inspect.signature(self.fn).parameters.keys())
             local_vars=dict()
@@ -67,6 +69,13 @@ class RepairloopRunner:
             pruned_locals=prune_default_local_var(self.fn,local_vars)
             for name,obj in pruned_locals.items():
                 new_args[arg_names.index(name)]=symbolize(tracer.context,name,obj,before_values)
+            
+            new_kwargs=dict(self.kwargs)
+            for name,obj in self.kwargs.items():
+                if is_default_local(self.fn,name,obj):
+                    new_kwargs[name]=obj
+                else:
+                    new_kwargs[name]=symbolize(tracer.context,name,obj,before_values)
 
             # Symbolize the global variables
             # new_globals=dict(deepcopy(self.fn.__globals__))
@@ -103,11 +112,8 @@ class RepairloopRunner:
             try:
                 global is_concolic_execution
                 is_concolic_execution=True
-                sys.settrace(self.traceit)
-                result=self.fn(*new_args, **self.kwargs)
-                sys.settrace(None)
+                result=self.fn(*new_args, **new_kwargs)
             except Exception as _exc:
-                sys.settrace(None)
                 print(f'Exception raised: {type(_exc)}: {_exc}')
                 if Configure.debug:
                     print(f'Decls: {tracer.decls}')
