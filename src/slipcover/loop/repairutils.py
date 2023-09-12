@@ -48,7 +48,9 @@ def prune_default_global_var(fn,global_vars:Dict[str,Any]):
     return output
 
 def is_default_local(fn:FunctionType,name,obj):
-    if name=='_sc_e':
+    if name.startswith("__") and name.endswith("__"):
+        return True
+    elif name=='_sc_e':
         return True
     elif inspect.isfunction(obj) or inspect.ismodule(obj) or inspect.ismethod(obj) or inspect.isclass(obj):
         return True
@@ -79,6 +81,7 @@ class PickledObject:
         self.unpickled:str=unpickled
 
         self.type=type(orig_data)
+        self.orig_data=orig_data
         try:
             self.orig_data_str:str=str(orig_data)
         except:
@@ -104,42 +107,42 @@ class SetObject(PickledObject):
     def __str__(self) -> str:
         return f'{self.name} (set): {self.elements}'
     
-__stack=0
 pickle._Pickler.dispatch[zint]=pickle._Pickler.dispatch[int]
 pickle._Pickler.dispatch[zbool]=pickle._Pickler.dispatch[bool]
 pickle._Pickler.dispatch[zstr]=pickle._Pickler.dispatch[str]
 pickle._Pickler.dispatch[zfloat]=pickle._Pickler.dispatch[float]
 pickle.dumps=pickle._dumps
 
-def pickle_object(fn:FunctionType,name:str,obj:object,is_global=False,pickled_ids:Set[int]=set()):
-    global __stack
+def pickle_object(fn:FunctionType,name:str,obj:object,is_global=False,pickled_ids:Dict[int,PickledObject]=dict()):
+    if id(obj) in pickled_ids:
+        return pickled_ids[id(obj)]
     if type(obj) in (zbool,zint,zstr,zfloat):
-        pickled_ids.add(id(obj.v))
-        return PickledObject(name,pickle.dumps(obj.v),obj.v)
+        res=PickledObject(name,pickle.dumps(obj.v),obj.v)
+        pickled_ids[id(obj.v)]=res
+        return res
     elif isinstance(obj,set):
         pickled_obj=SetObject(name,obj)
         new_set=set()
         for i,elem in enumerate(list(obj)):
             new_set.add(pickle_object(fn,i,elem,is_global=is_global,pickled_ids=pickled_ids))
         pickled_obj.elements=new_set
+        pickled_ids[id(obj)]=pickled_obj
         return pickled_obj
     else:
         try:
             data=pickle.dumps(obj)
-            pickled_ids.add(id(obj))
-            return PickledObject(name,data,obj)
-        except (pickle.PicklingError,ValueError):
+            res=PickledObject(name,data,obj)
+            pickled_ids[id(obj)]=res
+            return res
+        except (pickle.PicklingError,ValueError) as e:
             pickled_obj=PickledObject(name,orig_data=obj)
             for attr in dir(obj):
                 if (is_global and is_default_global(fn,attr,getattr(obj,attr))) or \
-                        (not is_global and is_default_local(fn,attr,getattr(obj,attr))) or \
-                        id(getattr(obj,attr)) in pickled_ids:
+                        (not is_global and is_default_local(fn,attr,getattr(obj,attr))):
                     continue
                 else:
-                    __stack+=1
-                    pickled_ids.add(id(getattr(obj,attr)))
                     attr_obj=pickle_object(fn,attr,getattr(obj,attr),is_global=is_global,pickled_ids=pickled_ids)
-                    __stack-=1
+                    pickled_ids[id(getattr(obj,attr))]=attr_obj
                     if attr_obj is not None:
                         pickled_obj.children[attr]=attr_obj
             return pickled_obj

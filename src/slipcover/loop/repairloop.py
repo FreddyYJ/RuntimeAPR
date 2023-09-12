@@ -1,9 +1,12 @@
+from copy import deepcopy
 import inspect
 import os
+import pickle
 import sys
 from types import FrameType, FunctionType, MethodType
 from typing import Any, Dict, List, Set, Tuple, Union
 import ast
+import traceback
 
 import z3
 from bytecode import Bytecode
@@ -28,7 +31,9 @@ class RepairloopRunner:
         self.fn=fn
 
         # For arguments and global variables
+        # self.args:list=deepcopy(args)
         self.args:list=args
+        # self.kwargs:Dict[str,object]=deepcopy(kwargs)
         self.kwargs:Dict[str,object]=kwargs
         self.bug_info=bug_info
         self.global_vars_without_default=prune_default_global_var(fn,bug_info.global_vars)
@@ -60,29 +65,52 @@ class RepairloopRunner:
         :return: z3 path constraints, local variables after execution, global variables after execution
         """
         with ConcolicTracer() as tracer:
+            """
+                Note: We do not symbolize arguments.
+                Now, we assume that the heap of the arguments are changed, but arguments itself are not changed.
+                e.g. Possible cases: arg.field changed
+                     Impossible cases: arg = 0 to arg = 1
+            """
             # Symbolize the arguments
             new_args=list(self.args)
             arg_names=list(inspect.signature(self.fn).parameters.keys())
             local_vars=dict()
-            for name,obj in zip(arg_names,self.args):
+            for name,obj in zip(arg_names,new_args):
                 local_vars[name]=obj
-            pruned_locals=prune_default_local_var(self.fn,local_vars)
+            pruned_locals:Dict[str,object]=prune_default_local_var(self.fn,local_vars)
             for name,obj in pruned_locals.items():
-                new_args[arg_names.index(name)]=symbolize(tracer.context,name,obj,before_values)
-            
+                # Symbolize fields of the arguments. Do not symbolize arguments itself.
+                if hasattr(obj,'__dict__'):
+                    new_fields=dict()
+                    for field_name,field in getattr(obj,'__dict__').items():
+                        if not is_default_local(self.fn,name+'.'+field_name,field):
+                            new_fields[field_name]=symbolize(tracer.context,name+'.'+field_name,field,before_values)
+                        else:
+                            new_fields[field_name]=field
+                    setattr(obj,'__dict__',new_fields)
+
+            # Keyword arguments
             new_kwargs=dict(self.kwargs)
-            for name,obj in self.kwargs.items():
-                if is_default_local(self.fn,name,obj):
-                    new_kwargs[name]=obj
-                else:
-                    new_kwargs[name]=symbolize(tracer.context,name,obj,before_values)
+            local_vars=dict()
+            for name,obj in new_kwargs.items():
+                local_vars[name]=obj
+            pruned_locals:Dict[str,object]=prune_default_local_var(self.fn,local_vars)
+            for name,obj in pruned_locals.items():
+                # Symbolize fields of the arguments. Do not symbolize arguments itself.
+                if hasattr(obj,'__dict__'):
+                    new_fields=dict()
+                    for field_name,field in getattr(obj,'__dict__'):
+                        if not is_default_local(self.fn,name+'.'+field_name,field):
+                            new_fields[field_name]=symbolize(tracer.context,name+'.'+field_name,field,before_values)
+                        else:
+                            new_fields[field_name]=field
+                    setattr(obj,'__dict__',new_fields)
 
             # Symbolize the global variables
-            # new_globals=dict(deepcopy(self.fn.__globals__))
             new_globals=dict(self.fn.__globals__)
             if not self.skip_global:
-                pruned_globals=prune_default_global_var(self.fn,self.fn.__globals__)
-                for name,obj in self.fn.__globals__.items():
+                pruned_globals=prune_default_global_var(self.fn,new_globals)
+                for name,obj in new_globals.items():
                     if name in pruned_globals:
                         new_globals[name]=symbolize(tracer.context,name,obj,before_values)
                 for name,obj in new_globals.items():
@@ -115,6 +143,7 @@ class RepairloopRunner:
                 result=self.fn(*new_args, **new_kwargs)
             except Exception as _exc:
                 print(f'Exception raised: {type(_exc)}: {_exc}')
+                traceback.print_exception(type(_exc),_exc,_exc.__traceback__)
                 if Configure.debug:
                     print(f'Decls: {tracer.decls}')
                 print(f'Path: {tracer.path}')
