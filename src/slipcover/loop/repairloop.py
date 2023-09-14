@@ -35,6 +35,7 @@ class RepairloopRunner:
         self.args:list=args
         # self.kwargs:Dict[str,object]=deepcopy(kwargs)
         self.kwargs:Dict[str,object]=kwargs
+        self.global_vars=dict(fn.__globals__)
         self.bug_info=bug_info
         self.global_vars_without_default=prune_default_global_var(fn,bug_info.global_vars)
         self.local_vars_without_default=prune_default_local_var(fn,bug_info.local_vars)
@@ -71,8 +72,9 @@ class RepairloopRunner:
                 e.g. Possible cases: arg.field changed
                      Impossible cases: arg = 0 to arg = 1
             """
+            new_args,new_kwargs,new_globals=deepcopy([self.args,self.kwargs,self.global_vars])
             # Symbolize the arguments
-            new_args=list(self.args)
+            # new_args=list(self.args)
             arg_names=list(inspect.signature(self.fn).parameters.keys())
             local_vars=dict()
             for name,obj in zip(arg_names,new_args):
@@ -90,7 +92,7 @@ class RepairloopRunner:
                     setattr(obj,'__dict__',new_fields)
 
             # Keyword arguments
-            new_kwargs=dict(self.kwargs)
+            # new_kwargs=dict(self.kwargs)
             local_vars=dict()
             for name,obj in new_kwargs.items():
                 local_vars[name]=obj
@@ -107,7 +109,7 @@ class RepairloopRunner:
                     setattr(obj,'__dict__',new_fields)
 
             # Symbolize the global variables
-            new_globals=dict(self.fn.__globals__)
+            # new_globals=dict(self.fn.__globals__)
             if not self.skip_global:
                 pruned_globals=prune_default_global_var(self.fn,new_globals)
                 for name,obj in new_globals.items():
