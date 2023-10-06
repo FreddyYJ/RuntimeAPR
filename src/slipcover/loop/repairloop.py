@@ -12,6 +12,7 @@ import z3
 from bytecode import Bytecode
 import gc
 
+from ..concolic.fuzzing import Fuzzer
 from .funcast import FunctionFinderVisitor
 from .repairutils import BugInformation,prune_default_global_var,is_default_global,compare_object,pickle_object,prune_default_local_var,is_default_local
 from ..concolic import ConcolicTracer,get_zvalue,zint,symbolize,ControlDependenceGraph,Block,ConditionTree,ConditionNode,DefUseGraph
@@ -31,11 +32,9 @@ class RepairloopRunner:
         self.fn=fn
 
         # For arguments and global variables
-        # self.args:list=deepcopy(args)
         self.args:list=args
-        # self.kwargs:Dict[str,object]=deepcopy(kwargs)
         self.kwargs:Dict[str,object]=kwargs
-        self.global_vars=dict(fn.__globals__)
+        self.global_vars=prune_default_global_var(fn,fn.__globals__)
         self.bug_info=bug_info
         self.global_vars_without_default=prune_default_global_var(fn,bug_info.global_vars)
         self.local_vars_without_default=prune_default_local_var(fn,bug_info.local_vars)
@@ -276,6 +275,14 @@ class RepairloopRunner:
         self.trial=0
         MAX_TRIAL=10
         print(f'Function throws an exception: {from_error}, move to repair loop.')
+
+        print('Try fuzzing to find exception...')
+        fuzzer=Fuzzer(self.fn,self.args,self.kwargs,self.bug_info.buggy_args_values,self.bug_info.buggy_global_values,
+                      from_error,self.bug_info.buggy_line)
+        buggy_args,buggy_kwargs,buggy_globals=fuzzer.fuzz()
+
+        exit(0)
+
         while not is_same:
             if self.trial>MAX_TRIAL:
                 print("Max trial 100 reached. Stop.")

@@ -781,6 +781,7 @@ def init_concolic_3():
         # IPython/Jupyter
         if name not in zstrmembers and name not in [
             'splitlines',
+            'rpartition',
             '__class__',
             '__contains__',
             '__delattr__',
