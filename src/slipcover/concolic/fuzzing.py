@@ -232,12 +232,13 @@ class Fuzzer:
         new_args=self.args
         new_kwargs=self.kwargs
         new_global_vars=self.global_vars
-        self.corpus.append((new_args,new_kwargs,new_global_vars,))
+        self.corpus.append((new_args,new_kwargs,prune_default_global_var(self.fn,new_global_vars),))
 
         trial=1
         while True:
             print(f'Trial: {trial}')
             trial+=1
+
 
             path,local_vars,global_vars,exc,line=self.run(new_args,new_kwargs,new_global_vars)
 
@@ -266,7 +267,7 @@ class Fuzzer:
 
             if exc is not None:
                 # TODO: loss function
-                self.corpus.append((new_args,new_kwargs,new_global_vars,))
+                self.corpus.append((new_args,new_kwargs,prune_default_global_var(self.fn,new_global_vars),))
             new_args,new_kwargs,new_global_vars=self.mutate(local_diffs,global_diffs)
 
     def is_vars_same(self,local_vars,global_vars):
@@ -286,10 +287,11 @@ class Fuzzer:
                 continue
             
             _obj=pickle_object(self.fn,name,obj)
+            base_obj=pickle_object(self.fn,name,self.local_vars[name])
             if _obj is not None:
-                _is_same=compare_object(_obj,self.local_vars[name])
+                _is_same=compare_object(_obj,base_obj)
                 if not _is_same:
-                    local_diffs[name]=(_obj,self.local_vars[name])
+                    local_diffs[name]=(obj,self.local_vars[name])
                 if is_same:
                     is_same=_is_same
             else:
@@ -311,10 +313,11 @@ class Fuzzer:
                     continue
 
                 _obj=pickle_object(self.fn,name,obj,is_global=True)
+                base_obj=pickle_object(self.fn,name,self.global_vars[name],is_global=True)
                 if _obj is not None:
-                    _is_same=compare_object(_obj,self.global_vars[name])
+                    _is_same=compare_object(_obj,base_obj)
                     if not _is_same:
-                        global_diffs[name]=(_obj,self.global_vars[name])
+                        global_diffs[name]=(obj,self.global_vars[name])
                     if is_same:
                         is_same=_is_same
                 else:
@@ -344,7 +347,9 @@ class Fuzzer:
                 e.g. Possible cases: arg.field changed
                      Impossible cases: arg = 0 to arg = 1
             """
-            args,kwargs,globals=deepcopy([new_args,new_kwargs,new_globals])
+            # Prune default variables
+            next_globals=prune_default_global_var(self.fn,new_globals)
+            args,kwargs,globals=deepcopy([new_args,new_kwargs,next_globals])
             for name,obj in globals.items():
                 self.fn.__globals__[name]=obj
 
@@ -360,8 +365,8 @@ class Fuzzer:
                 print(f'Path: {tracer.path}')
 
                 tb=_exc.__traceback__
-                info=inspect.getinnerframes(tb)[1]
-                return tracer.path,info.frame.f_locals,info.frame.f_globals,_exc,_exc.__traceback__.tb_lineno
+                info=inspect.getinnerframes(tb)[-1]
+                return tracer.path,info.frame.f_locals,info.frame.f_globals,_exc,info.lineno
             
             if Configure.debug:
                 print(f'Decls: {tracer.decls}')

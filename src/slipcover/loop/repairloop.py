@@ -150,7 +150,7 @@ class RepairloopRunner:
                 print(f'Path: {tracer.path}')
 
                 tb=_exc.__traceback__
-                info=inspect.getinnerframes(tb)[1]
+                info=inspect.getinnerframes(tb)[-1]
                 return tracer.path,info.frame.f_locals,info.frame.f_globals
             
             if Configure.debug:
@@ -262,7 +262,7 @@ class RepairloopRunner:
             self.fn(*self.args, **self.kwargs)
         except Exception as e:
             tb=e.__traceback__
-            info=inspect.getinnerframes(tb)[1]
+            info=inspect.getinnerframes(tb)[-1]
             return prune_default_local_var(self.fn,info.frame.f_locals), prune_default_global_var(self.fn,info.frame.f_globals)
 
         return (dict(),dict())
@@ -383,8 +383,13 @@ def except_handler(e:Exception):
     global is_concolic_execution
     if is_concolic_execution:
         raise
+    else:
+        is_concolic_execution=True
     innerframes=inspect.getinnerframes(e.__traceback__)
     inner_info:inspect.FrameInfo=innerframes[-1]
+
+    print('Exception thrown: ')
+    traceback.print_exception(type(e),e,e.__traceback__)
     
     objects=gc.get_referrers(inner_info.frame.f_code)
     for obj in objects:
