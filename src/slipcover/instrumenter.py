@@ -238,7 +238,7 @@ class Instrumenter:
         
         return try_block,except_block
 
-    def insert_try_except(self,code:CodeType):
+    def insert_try_except_old(self,code:CodeType):
         bc=Bytecode.from_code(code)
         # Skip if already instrumented
         if isinstance(bc[0],Instr) and bc[0].name=='LOAD_CONST' and bc[0].arg=='__runtime_apr__':
@@ -285,12 +285,148 @@ class Instrumenter:
             elif isinstance(instr,Instr) and instr.name=='LOAD_CONST' and isinstance(instr.arg,CodeType) and \
                         instr.arg.co_filename==code.co_filename and '__runtime_apr__' not in instr.arg.co_consts:
                 # Instrument nested CodeType
-                new_bc.append(Instr('LOAD_CONST',self.insert_try_except(instr.arg),lineno=instr.lineno))
+                new_bc.append(Instr('LOAD_CONST',self.insert_try_except_old(instr.arg),lineno=instr.lineno))
             else:
                 new_bc.append(instr)
                     
         # We insert except blocks at the end of bytecode
         new_bytecode=Bytecode(new_bc+except_bc)
+        new_bytecode._copy_attr_from(bc)
+        # print('--------------')
+        # dump_bytecode(new_bytecode,lineno=True)
+        try:
+            new_code=new_bytecode.to_code()
+            # Add new variables
+            new_code.replace(co_varnames=tuple(list(new_code.co_varnames)+['_sc_e','Exception']))
+        except:
+            print(code.co_filename)
+            dump_bytecode(bc,lineno=True)
+            print('------------------')
+            dump_bytecode(new_bytecode,lineno=True)
+            raise
+
+        self.code_stack.pop()
+        return new_code
+    
+    def insert_try_except(self,code:CodeType):
+        bc=Bytecode.from_code(code)
+        # Skip if already instrumented
+        if isinstance(bc[0],Instr) and bc[0].name=='LOAD_CONST' and bc[0].arg=='__runtime_apr__':
+            return code
+        
+        self.code_stack.append(bc)
+        
+        # print(code.co_firstlineno)
+        # dump_bytecode(bc,lineno=True)
+        cur_lineno=code.co_firstlineno
+        new_bc=[Instr('LOAD_CONST','__runtime_apr__',lineno=1)]
+        except_block=[]
+        except_label=Label()
+        dummy_label=Label()
+        except_exception_label=Label()
+
+        new_bc.append(Instr('SETUP_FINALLY',except_label, lineno=cur_lineno))  # Declare try block
+        for instr in bc:
+            if isinstance(instr,Instr) and instr.name=='LOAD_CONST' and isinstance(instr.arg,CodeType) and \
+                        instr.arg.co_filename==code.co_filename and '__runtime_apr__' not in instr.arg.co_consts:
+                # Instrument nested CodeType
+                new_bc.append(Instr('LOAD_CONST',self.insert_try_except(instr.arg),lineno=instr.lineno))
+            else:
+                new_bc.append(instr)
+        new_bc.append(Instr('POP_BLOCK', lineno=cur_lineno))
+
+        except_block.append(except_label)
+        except_block.append(Instr('DUP_TOP',lineno=cur_lineno))
+        except_block.append(Instr('LOAD_GLOBAL', 'Exception', lineno=cur_lineno))
+        if PYTHON_VERSION[1]<=8:
+            except_block.append(Instr('COMPARE_OP', Compare.EXC_MATCH, lineno=cur_lineno))
+            except_block.append(Instr('POP_JUMP_IF_FALSE', dummy_label, lineno=cur_lineno))
+        else:
+            except_block.append(Instr('JUMP_IF_NOT_EXC_MATCH',dummy_label, lineno=cur_lineno)) # Jump if current Exception is not Exception
+        except_block.append(Instr('POP_TOP', lineno=cur_lineno))
+        if self.is_script_mode:
+            except_block.append(Instr('STORE_NAME', '_sc_e', lineno=cur_lineno))
+        else:
+            except_block.append(Instr('STORE_FAST', '_sc_e', lineno=cur_lineno))
+        except_block.append(Instr('POP_TOP', lineno=cur_lineno))  # Until now: except Exception as _sc_e:
+
+        except_block.append(Instr('SETUP_FINALLY',except_exception_label, lineno=cur_lineno)) # Exception in except block
+        if self.throw_exception_when_error:  # Raise original exception if option specified
+            except_block.append(Instr('RAISE_VARARGS',0, lineno=cur_lineno))
+        except_block.append(Instr('LOAD_CONST',0,lineno=instr.lineno))
+        except_block.append(Instr('LOAD_CONST',('except_handler',),lineno=instr.lineno))
+        except_block.append(Instr('IMPORT_NAME','slipcover.loop',lineno=instr.lineno))
+        except_block.append(Instr('IMPORT_FROM','except_handler',lineno=instr.lineno))
+        if self.is_script_mode:
+            except_block.append(Instr('STORE_NAME', 'except_handler', lineno=cur_lineno))
+        else:
+            except_block.append(Instr('STORE_FAST', 'except_handler', lineno=cur_lineno))
+        except_block.append(Instr('POP_TOP',lineno=instr.lineno))  # Until now: from slipcover.loop import except_handler
+
+        if self.is_script_mode:
+            except_block.append(Instr('LOAD_NAME','except_handler', lineno=cur_lineno))
+        else:
+            except_block.append(Instr('LOAD_FAST','except_handler', lineno=cur_lineno))
+        if self.is_script_mode:
+            except_block.append(Instr('LOAD_NAME', '_sc_e', lineno=cur_lineno))
+        else:
+            except_block.append(Instr('LOAD_FAST', '_sc_e', lineno=cur_lineno))    
+        except_block.append(Instr('CALL_FUNCTION',1, lineno=cur_lineno))
+        except_block.append(Instr('POP_TOP', lineno=cur_lineno))  # Until now: except_handler(_sc_e)
+        # TODO: Handle return value from repair loop
+
+        # # Print exception
+        # if self.is_script_mode:
+        #     except_block.append(Instr('LOAD_NAME', 'print', lineno=cur_lineno))
+        # else:
+        #     except_block.append(Instr('LOAD_GLOBAL', 'print', lineno=cur_lineno))
+        # if self.is_script_mode:
+        #     except_block.append(Instr('LOAD_NAME', '_sc_e', lineno=cur_lineno))
+        # else:
+        #     except_block.append(Instr('LOAD_FAST', '_sc_e', lineno=cur_lineno))
+        # except_block.append(Instr('CALL_FUNCTION', 1, lineno=cur_lineno))
+        # except_block.append(Instr('POP_TOP', lineno=cur_lineno)) # Pop return
+
+        except_block.append(Instr('POP_BLOCK', lineno=cur_lineno)) # Pop except block
+        except_block.append(Instr('POP_EXCEPT', lineno=cur_lineno)) # Pop current Exception
+
+        # Delete _sc_e
+        except_block.append(Instr('LOAD_CONST', None, lineno=cur_lineno))
+        if self.is_script_mode:
+            except_block.append(Instr('STORE_NAME', '_sc_e', lineno=cur_lineno))
+            except_block.append(Instr('DELETE_NAME', '_sc_e', lineno=cur_lineno))
+        else:
+            except_block.append(Instr('STORE_FAST', '_sc_e', lineno=cur_lineno))
+            except_block.append(Instr('DELETE_FAST', '_sc_e', lineno=cur_lineno))
+
+        # Create dummy and except_exception block
+        except_block.append(dummy_label)  # Not handled exceptions
+        if PYTHON_VERSION[1]<=8:
+            except_block.append(Instr('POP_TOP', lineno=cur_lineno))
+            except_block.append(Instr('POP_TOP', lineno=cur_lineno))
+            except_block.append(Instr('POP_TOP', lineno=cur_lineno))
+            except_block.append(Instr('RAISE_VARARGS',0, lineno=cur_lineno))
+        else:
+            except_block.append(Instr('RERAISE',1, lineno=cur_lineno))
+
+        except_block.append(except_exception_label)  # Exception in except block
+        if PYTHON_VERSION[1]<=8:
+            except_block.append(Instr('POP_TOP', lineno=cur_lineno))
+            except_block.append(Instr('POP_TOP', lineno=cur_lineno))
+            except_block.append(Instr('POP_TOP', lineno=cur_lineno))
+            except_block.append(Instr('RAISE_VARARGS',0, lineno=cur_lineno))
+        else:
+            except_block.append(Instr('LOAD_CONST',None, lineno=cur_lineno))
+            if self.is_script_mode:
+                except_block.append(Instr('STORE_NAME','_sc_e', lineno=cur_lineno))
+                except_block.append(Instr('DELETE_NAME','_sc_e', lineno=cur_lineno))
+            else:
+                except_block.append(Instr('STORE_FAST','_sc_e', lineno=cur_lineno))
+                except_block.append(Instr('DELETE_FAST','_sc_e', lineno=cur_lineno))
+            except_block.append(Instr('RERAISE',0, lineno=cur_lineno))
+                    
+        # We insert except blocks at the end of bytecode
+        new_bytecode=Bytecode(new_bc+except_block)
         new_bytecode._copy_attr_from(bc)
         # print('--------------')
         # dump_bytecode(new_bytecode,lineno=True)

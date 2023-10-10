@@ -65,8 +65,7 @@ class RuntimeAPRMetaPathFinder(MetaPathFinder):
                 return None
 
             if self.file_matcher.matches(spec.origin):
-                if self.debug:
-                    print(f"instrumenting {fullname} from {spec.origin}")
+                print(f"instrumenting {fullname} from {spec.origin}")
                 spec.loader = RuntimeAPRLoader(self.sci, spec.loader, spec.origin)
 
             return spec
