@@ -14,6 +14,8 @@ from ..configure import Configure
 from ..loop.repairutils import PickledObject, SetObject,compare_object, is_default_global, is_default_local, pickle_object, prune_default_global_var, prune_default_local_var
 from .ConcolicTracer import ConcolicTracer, symbolize
 
+MAX_TRIAL=100
+
 class Fuzzer:
     def __init__(self,fn:FunctionType,args:List[object],kwargs:Dict[str,object],local_vars:Dict[str,PickledObject],
                  global_vars:Dict[str,PickledObject],exception,excep_line:int,*,skip_global=False) -> None:
@@ -239,7 +241,7 @@ class Fuzzer:
         self.corpus.append((new_args,new_kwargs,prune_default_global_var(self.fn,new_global_vars),))
 
         trial=1
-        while True:
+        while trial<=MAX_TRIAL:
             print(f'Trial: {trial}')
             trial+=1
 
