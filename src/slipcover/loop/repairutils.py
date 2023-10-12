@@ -137,14 +137,18 @@ def pickle_object(fn:FunctionType,name:str,obj:object,is_global=False,pickled_id
         except (pickle.PicklingError,ValueError) as e:
             pickled_obj=PickledObject(name,orig_data=obj)
             for attr in dir(obj):
-                if (is_global and is_default_global(fn,attr,getattr(obj,attr))) or \
-                        (not is_global and is_default_local(fn,attr,getattr(obj,attr))):
-                    continue
-                else:
-                    attr_obj=pickle_object(fn,attr,getattr(obj,attr),is_global=is_global,pickled_ids=pickled_ids)
-                    pickled_ids[id(getattr(obj,attr))]=attr_obj
-                    if attr_obj is not None:
-                        pickled_obj.children[attr]=attr_obj
+                try:
+                    if (is_global and is_default_global(fn,attr,getattr(obj,attr))) or \
+                            (not is_global and is_default_local(fn,attr,getattr(obj,attr))):
+                        continue
+                    else:
+                        attr_obj=pickle_object(fn,attr,getattr(obj,attr),is_global=is_global,pickled_ids=pickled_ids)
+                        pickled_ids[id(getattr(obj,attr))]=attr_obj
+                        if attr_obj is not None:
+                            pickled_obj.children[attr]=attr_obj
+                except Exception as e:
+                    print(f'Error when pickling {attr}: {e}, skip!')
+
             return pickled_obj
         except Exception as e:
             # ctypes objects cannot be pickled, use object directly

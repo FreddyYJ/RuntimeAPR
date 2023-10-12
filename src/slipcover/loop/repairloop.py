@@ -45,7 +45,7 @@ class RepairloopRunner:
         if Configure.debug:
             print(f'Global vars: {self.global_vars_without_default}')
         self.cfg=ControlDependenceGraph(self.fn)
-        self.def_use_graph:DefUseGraph=DefUseGraph(self.fn)
+        # self.def_use_graph:DefUseGraph=DefUseGraph(self.fn)
         self.cond_tree:ConditionTree=ConditionTree(self.cfg.cfg)
         self.skip_global:bool=False # Skip global variables
 

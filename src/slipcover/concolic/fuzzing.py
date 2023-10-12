@@ -26,7 +26,7 @@ class Fuzzer:
         self.exception=exception
         self.excep_line=excep_line
 
-        self.def_use_graph:DefUseGraph=DefUseGraph(self.fn)
+        # self.def_use_graph:DefUseGraph=DefUseGraph(self.fn)
         self.corpus:List[Tuple[List[object],Dict[str,object],Dict[str,object]]]=[]
         self.candidate_vars:List[str]=[]
 
@@ -109,6 +109,10 @@ class Fuzzer:
                 for name in names.copy():
                     if is_default_global(self.fn,name,getattr(obj,'__dict__')[name]):
                         names.remove(name)
+                
+                if len(names)==0:
+                    continue_mutate=False
+                    return obj
                 index=random.randint(0,len(names)-1)
                 
                 new_field=self.mutate_object(getattr(obj,'__dict__')[name],prev_name+'.'+name,continue_mutate=False)
