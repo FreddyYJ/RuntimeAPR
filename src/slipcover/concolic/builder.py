@@ -396,6 +396,8 @@ class CFGBuilder(ast.NodeVisitor):
                     return visit_func(node.value)
                 elif isinstance(node.value, ast.Call):
                     return visit_func(node.value)
+                elif 'slice' in node.value._fields:
+                    return visit_func(node.value)
                 else:
                     raise AttributeError(
                         "WTF is this thing, build it in??", type(node)
