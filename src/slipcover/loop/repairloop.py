@@ -281,6 +281,9 @@ class RepairloopRunner:
                       from_error,self.bug_info.buggy_line)
         buggy_args,buggy_kwargs,buggy_globals=fuzzer.fuzz()
 
+        if buggy_args is None:
+            print('Cannot find buggy inputs. Stop.')
+            exit(0)
         exit(0)
 
         while not is_same:
@@ -385,13 +388,22 @@ def except_handler(e:Exception):
         raise
     else:
         is_concolic_execution=True
-    innerframes=inspect.getinnerframes(e.__traceback__)
-    inner_info:inspect.FrameInfo=innerframes[-1]
+    innerframes=inspect.getinnerframes(e.__traceback__)[1:]
+    innerframes.reverse()
+    outerframes=inspect.getouterframes(e.__traceback__.tb_frame)
+    total_frames=innerframes+outerframes
+    inner_info:inspect.FrameInfo=total_frames[0]
+    cur_index=0
+
+    while not inner_info.filename.endswith('.py') or (inner_info.function.startswith('<') and inner_info.function.endswith('>')):
+        cur_index+=1
+        inner_info=total_frames[cur_index]
 
     print('Exception thrown: ')
     traceback.print_exception(type(e),e,e.__traceback__)
     
     objects=gc.get_referrers(inner_info.frame.f_code)
+    func=None
     for obj in objects:
         if isinstance(obj,FunctionType) and obj.__name__==inner_info.function:
             func=obj
@@ -451,8 +463,8 @@ def except_handler(e:Exception):
             kws[k]=v
     kwonlys.update(kws)
 
-    print(f'Args: {pos_only+norms+vargs}')
-    print(f'Kwargs: {kwonlys}')
+    # print(f'Args: {pos_only+norms+vargs}')
+    # print(f'Kwargs: {kwonlys}')
     bug_info=BugInformation(inner_info.lineno,inner_info.function,
                             inner_info.frame.f_locals.copy(),inner_info.frame.f_globals.copy())
     for name,obj in prune_default_local_var(func,inner_info.frame.f_locals.copy()).items():

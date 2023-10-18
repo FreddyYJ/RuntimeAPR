@@ -403,7 +403,7 @@ class CFGBuilder(ast.NodeVisitor):
                         "WTF is this thing, build it in??", type(node)
                     )
             elif isinstance(node, ast.Constant):
-                return node.value
+                return str(node.value)
             elif isinstance(node, ast.Call):
                 if "id" in node.func._fields:
                     return node.func.id
@@ -468,7 +468,10 @@ class CFGBuilder(ast.NodeVisitor):
 
         if isinstance(node.exc, ast.Call):
             if isinstance(node.exc.func,ast.Attribute):
-                e_id=f'{node.exc.func.value.id}.{node.exc.func.attr}'
+                if isinstance(node.exc.func.value,ast.Call):
+                    e_id=f'{node.exc.func.value.func.id}.{node.exc.func.attr}'
+                else:
+                    e_id=f'{node.exc.func.value.id}.{node.exc.func.attr}'
             else:
                 e_id = node.exc.func.id
         elif isinstance(node.exc, ast.Name):

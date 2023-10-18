@@ -6,6 +6,7 @@ from types import FunctionType
 from typing import Any, Dict, List, Tuple
 import random
 import struct
+from enum import Enum
 
 import z3
 
@@ -34,6 +35,12 @@ class Fuzzer:
 
     def mutate_object(self,obj:object,prev_name:str,continue_mutate=True):
         if continue_mutate:
+            if isinstance(obj,Enum):
+                candidates=[]
+                for elem in obj.__class__:
+                    candidates.append(elem)
+                index=random.randint(0,len(candidates)-1)
+                return candidates[index]
             if isinstance(obj,bool):
                 continue_mutate=False
                 return not obj
@@ -140,18 +147,23 @@ class Fuzzer:
         change_global=False
         if (local_diff is None and global_diff is None) or (len(local_diff)==0 and len(global_diff)==0):
             if not self._args_mutatible(selected_args) and not self._args_mutatible(list(selected_kwargs.values())):
+                print('No mutatible args and kwargs, mutate global vars.')
                 change_global=True
             elif not self._args_mutatible(selected_args):
                 _rand=random.randint(0,1)
                 if _rand==0:
+                    print('No mutatible args, mutate global vars.')
                     change_global=True
                 else:
+                    print('No mutatible args, mutate kwargs.')
                     change_kwargs=True
             elif not self._args_mutatible(list(selected_kwargs.values())):
                 _rand=random.randint(0,1)
                 if _rand==0:
+                    print('No mutatible kwargs, mutate global vars.')
                     change_global=True
                 else:
+                    print('No mutatible kwargs, mutate args.')
                     change_args=True
             else:
                 # Mutate random vars
@@ -229,8 +241,9 @@ class Fuzzer:
 
                     candidate_vars.append(name)
                 
-                random.shuffle(candidate_vars)
-                copy_global_vars[candidate_vars[0]]=self.mutate_object(copy_global_vars[candidate_vars[0]],candidate_vars[0])
+                if len(candidate_vars)!=0:
+                    random.shuffle(candidate_vars)
+                    copy_global_vars[candidate_vars[0]]=self.mutate_object(copy_global_vars[candidate_vars[0]],candidate_vars[0])
 
         return copy_args,copy_kwargs,copy_global_vars
 
@@ -251,6 +264,10 @@ class Fuzzer:
             if isinstance(exc,type(self.exception)) and self.excep_line==line:
                 print('Exception raised, stop fuzzing.')
                 return new_args,new_kwargs,new_global_vars
+            elif line!=-1 and self.excep_line!=line:
+                print(f'Exception raised at line {line}, but expected at line {self.excep_line}.')
+            elif not isinstance(exc,type(self.exception)):
+                print(f'Exception raised: {type(exc)}, but expected {type(self.exception)}.')
 
             if len(local_vars)!=0 or len(global_vars)!=0:
                 is_same,local_diffs,global_diffs=self.is_vars_same(local_vars,global_vars)            
@@ -275,6 +292,8 @@ class Fuzzer:
                 # TODO: loss function
                 self.corpus.append((new_args,new_kwargs,prune_default_global_var(self.fn,new_global_vars),))
             new_args,new_kwargs,new_global_vars=self.mutate(local_diffs,global_diffs)
+        
+        return None,None,None
 
     def is_vars_same(self,local_vars,global_vars):
         is_same=True
@@ -371,7 +390,13 @@ class Fuzzer:
                 print(f'Path: {tracer.path}')
 
                 tb=_exc.__traceback__
-                info=inspect.getinnerframes(tb)[-1]
+                infos=inspect.getinnerframes(tb)
+                info=infos[-1]
+                cur_index=-1
+                while not info.filename.endswith('.py'):
+                    cur_index-=1
+                    info=infos[cur_index]
+
                 return tracer.path,info.frame.f_locals,info.frame.f_globals,_exc,info.lineno
             
             if Configure.debug:
