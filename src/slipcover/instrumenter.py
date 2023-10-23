@@ -310,6 +310,7 @@ class Instrumenter:
     
     def insert_try_except(self,code:CodeType):
         bc=Bytecode.from_code(code)
+        is_global=bc.name=='<module>'
         # Skip if already instrumented
         if isinstance(bc[0],Instr) and bc[0].name=='LOAD_CONST' and bc[0].arg=='__runtime_apr__':
             return code
@@ -331,9 +332,11 @@ class Instrumenter:
                         instr.arg.co_filename==code.co_filename and '__runtime_apr__' not in instr.arg.co_consts:
                 # Instrument nested CodeType
                 new_bc.append(Instr('LOAD_CONST',self.insert_try_except(instr.arg),lineno=instr.lineno))
+            elif isinstance(instr,Instr) and instr.name=='RETURN_VALUE':
+                new_bc.append(Instr('POP_BLOCK', lineno=cur_lineno))
+                new_bc.append(instr)
             else:
                 new_bc.append(instr)
-        new_bc.append(Instr('POP_BLOCK', lineno=cur_lineno))
 
         except_block.append(except_label)
         except_block.append(Instr('DUP_TOP',lineno=cur_lineno))
@@ -344,7 +347,7 @@ class Instrumenter:
         else:
             except_block.append(Instr('JUMP_IF_NOT_EXC_MATCH',dummy_label, lineno=cur_lineno)) # Jump if current Exception is not Exception
         except_block.append(Instr('POP_TOP', lineno=cur_lineno))
-        if self.is_script_mode:
+        if is_global:
             except_block.append(Instr('STORE_NAME', '_sc_e', lineno=cur_lineno))
         else:
             except_block.append(Instr('STORE_FAST', '_sc_e', lineno=cur_lineno))
@@ -357,17 +360,17 @@ class Instrumenter:
         except_block.append(Instr('LOAD_CONST',('except_handler',),lineno=instr.lineno))
         except_block.append(Instr('IMPORT_NAME','slipcover.loop',lineno=instr.lineno))
         except_block.append(Instr('IMPORT_FROM','except_handler',lineno=instr.lineno))
-        if self.is_script_mode:
+        if is_global:
             except_block.append(Instr('STORE_NAME', 'except_handler', lineno=cur_lineno))
         else:
             except_block.append(Instr('STORE_FAST', 'except_handler', lineno=cur_lineno))
         except_block.append(Instr('POP_TOP',lineno=instr.lineno))  # Until now: from slipcover.loop import except_handler
 
-        if self.is_script_mode:
+        if is_global:
             except_block.append(Instr('LOAD_NAME','except_handler', lineno=cur_lineno))
         else:
             except_block.append(Instr('LOAD_FAST','except_handler', lineno=cur_lineno))
-        if self.is_script_mode:
+        if is_global:
             except_block.append(Instr('LOAD_NAME', '_sc_e', lineno=cur_lineno))
         else:
             except_block.append(Instr('LOAD_FAST', '_sc_e', lineno=cur_lineno))    
@@ -388,16 +391,22 @@ class Instrumenter:
         # except_block.append(Instr('POP_TOP', lineno=cur_lineno)) # Pop return
 
         except_block.append(Instr('POP_BLOCK', lineno=cur_lineno)) # Pop except block
-        except_block.append(Instr('POP_EXCEPT', lineno=cur_lineno)) # Pop current Exception
+        except_block.append(Instr('BEGIN_FINALLY', lineno=cur_lineno)) # Pop current Exception
 
         # Delete _sc_e
+        except_block.append(except_exception_label)  # Exception in except block
         except_block.append(Instr('LOAD_CONST', None, lineno=cur_lineno))
-        if self.is_script_mode:
+        if is_global:
             except_block.append(Instr('STORE_NAME', '_sc_e', lineno=cur_lineno))
             except_block.append(Instr('DELETE_NAME', '_sc_e', lineno=cur_lineno))
         else:
             except_block.append(Instr('STORE_FAST', '_sc_e', lineno=cur_lineno))
             except_block.append(Instr('DELETE_FAST', '_sc_e', lineno=cur_lineno))
+        except_block.append(Instr('END_FINALLY', lineno=cur_lineno))
+        except_block.append(Instr('POP_EXCEPT', lineno=cur_lineno))
+        # TODO: Change to return _except_handler(_sc_e)'s return
+        except_block.append(Instr('LOAD_CONST', 'None', lineno=cur_lineno))
+        except_block.append(Instr('RETURN_VALUE', lineno=cur_lineno))
 
         # Create dummy and except_exception block
         except_block.append(dummy_label)  # Not handled exceptions
@@ -408,22 +417,6 @@ class Instrumenter:
             except_block.append(Instr('RAISE_VARARGS',0, lineno=cur_lineno))
         else:
             except_block.append(Instr('RERAISE',1, lineno=cur_lineno))
-
-        except_block.append(except_exception_label)  # Exception in except block
-        if PYTHON_VERSION[1]<=8:
-            except_block.append(Instr('POP_TOP', lineno=cur_lineno))
-            except_block.append(Instr('POP_TOP', lineno=cur_lineno))
-            except_block.append(Instr('POP_TOP', lineno=cur_lineno))
-            except_block.append(Instr('RAISE_VARARGS',0, lineno=cur_lineno))
-        else:
-            except_block.append(Instr('LOAD_CONST',None, lineno=cur_lineno))
-            if self.is_script_mode:
-                except_block.append(Instr('STORE_NAME','_sc_e', lineno=cur_lineno))
-                except_block.append(Instr('DELETE_NAME','_sc_e', lineno=cur_lineno))
-            else:
-                except_block.append(Instr('STORE_FAST','_sc_e', lineno=cur_lineno))
-                except_block.append(Instr('DELETE_FAST','_sc_e', lineno=cur_lineno))
-            except_block.append(Instr('RERAISE',0, lineno=cur_lineno))
                     
         # We insert except blocks at the end of bytecode
         new_bytecode=Bytecode(new_bc+except_block)

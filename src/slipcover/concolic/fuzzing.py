@@ -390,14 +390,17 @@ class Fuzzer:
                 print(f'Path: {tracer.path}')
 
                 tb=_exc.__traceback__
-                infos=inspect.getinnerframes(tb)
-                info=infos[-1]
-                cur_index=-1
-                while not info.filename.endswith('.py'):
-                    cur_index-=1
-                    info=infos[cur_index]
+                innerframes=inspect.getinnerframes(_exc.__traceback__)
+                innerframes.reverse()
+                inner_info:inspect.FrameInfo=innerframes[0]
+                cur_index=0
 
-                return tracer.path,info.frame.f_locals,info.frame.f_globals,_exc,info.lineno
+                while not inner_info.filename.endswith('.py') or (inner_info.function.startswith('<') and inner_info.function.endswith('>')):
+                    cur_index+=1
+                    inner_info=innerframes[cur_index]
+
+
+                return tracer.path,inner_info.frame.f_locals,inner_info.frame.f_globals,_exc,inner_info.lineno
             
             if Configure.debug:
                 print(f'Decls: {tracer.decls}')

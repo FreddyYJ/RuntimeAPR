@@ -17,6 +17,7 @@ from .funcast import FunctionFinderVisitor
 from .repairutils import BugInformation,prune_default_global_var,is_default_global,compare_object,pickle_object,prune_default_local_var,is_default_local
 from ..concolic import ConcolicTracer,get_zvalue,zint,symbolize,ControlDependenceGraph,Block,ConditionTree,ConditionNode,DefUseGraph
 from ..configure import Configure
+from ..concolic.restate import StateReproducer
 
 is_concolic_execution=False
 
@@ -45,7 +46,8 @@ class RepairloopRunner:
         if Configure.debug:
             print(f'Global vars: {self.global_vars_without_default}')
         self.cfg=ControlDependenceGraph(self.fn)
-        # self.def_use_graph:DefUseGraph=DefUseGraph(self.fn)
+        def_use_graph:DefUseGraph=DefUseGraph(self.fn)
+        self.defines=def_use_graph.entries
         self.cond_tree:ConditionTree=ConditionTree(self.cfg.cfg)
         self.skip_global:bool=False # Skip global variables
 
@@ -276,6 +278,7 @@ class RepairloopRunner:
         MAX_TRIAL=10
         print(f'Function throws an exception: {from_error}, move to repair loop.')
 
+        # Run fuzzer to reproduce exception
         print('Try fuzzing to find exception...')
         fuzzer=Fuzzer(self.fn,self.args,self.kwargs,self.bug_info.buggy_args_values,self.bug_info.buggy_global_values,
                       from_error,self.bug_info.buggy_line)
@@ -283,7 +286,12 @@ class RepairloopRunner:
 
         if buggy_args is None:
             print('Cannot find buggy inputs. Stop.')
-            exit(0)
+            exit(1)
+
+        # Mutating buggy inputs to find exact states
+        reproducer=StateReproducer(self.fn,self.bug_info.local_vars,self.bug_info.global_vars,
+                                   self.args,self.kwargs,self.defines)
+        reproducer.reproduce()
         exit(0)
 
         while not is_same:
@@ -388,10 +396,13 @@ def except_handler(e:Exception):
         raise
     else:
         is_concolic_execution=True
-    innerframes=inspect.getinnerframes(e.__traceback__)[1:]
+    innerframes=inspect.getinnerframes(e.__traceback__)
     innerframes.reverse()
     outerframes=inspect.getouterframes(e.__traceback__.tb_frame)
-    total_frames=innerframes+outerframes
+    if innerframes[-1]==outerframes[0]:
+        total_frames=innerframes[:-2]+outerframes
+    else:
+        total_frames=innerframes+outerframes
     inner_info:inspect.FrameInfo=total_frames[0]
     cur_index=0
 
