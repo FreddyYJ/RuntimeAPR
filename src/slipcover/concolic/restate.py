@@ -138,6 +138,26 @@ class StateReproducer:
                             else:
                                 cand_globals.add(_cand.node.id)
 
+        if len(global_diffs)!=0:
+            print('Mutate global variables...')
+            for name,(obj,base_obj) in global_diffs.items():
+                if base_obj is None:
+                    print(f'New global var {name}: {obj}')
+                    # TODO new global var found
+                else:
+                    print(f'Mutate global var {name}: {base_obj} -> {obj}')
+                    # Find the corresponding argument, kwargs, globals
+                    for define in self.def_use_chains:
+                        _cand=self._find_use(define,name)
+                        if _cand is not None:
+                            if _cand not in cand_args:
+                                cand_args.add(_cand.node.id)
+                            elif _cand not in cand_kwargs:
+                                cand_kwargs.add(_cand.node.id)
+                            else:
+                                cand_globals.add(_cand.node.id)
+
+
         if len(cand_args)!=0:
             print(f'Candidate args: {cand_args}')
         if len(cand_kwargs)!=0:
