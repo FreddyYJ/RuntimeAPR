@@ -26,3 +26,204 @@ EXCEPT_BUGS=(('black',21),('sanic',2),('scrapy',7),('tornado',3),  # Not reprodu
     ('cookiecutter',1),('cookiecutter',2),('cookiecutter',3),('cookiecutter',4),  # cookiecutter: lsb_release module not work if python is installed manually
              ('PySnooper',2),  # PySnooper: Import error
              )
+
+TEST_TOOLS={
+    'PySnooper':'pytest',
+    'ansible':'pytest',
+    'black':'unittest',
+    'cookiecutter':'tox',
+    'fastapi':'pytest',
+    'httpie':'pytest',
+    'keras':'pytest',
+    'luigi':'pytest',
+    'matplotlib':'pytest',
+    'pandas':'pytest',
+    'sanic':'pytest',
+    'scrapy':'unittest',
+    'spacy':'pytest',
+    'thefuck':'pytest',
+    'tornado':'unittest',
+    'tqdm':'pytest',
+    'yountube-dl':'unittest'
+}
+
+ANSIBLE_LIST={
+    10:['lib/ansible/modules/system/pamd.py','test/units/modules/system/test_pamd.py::PamdServiceTestCase::test_remove_first_rule']
+}
+
+BLACK_LIST={
+    9:['black.py','tests.test_black.BlackTestCase.test_python2_print_function'],
+    12:['black.py','tests.test_black.BlackTestCase.test_bracket_match'],
+    13:['black.py','tests.test_black.BlackTestCase.test_python37'],
+    14:['black.py','tests.test_black.BlackTestCase.test_get_future_imports'],
+    16:['black.py','tests.test_black.BlackTestCase.test_symlink_out_of_root_directory'],
+    17:['black.py','tests.test_black.BlackTestCase.test_empty']
+}
+
+FASTAPI_LIST={
+    3:['fastapi/routing.py','tests/test_serialize_response_model.py::test_valid'],
+    7:['fastapi/applications.py','tests/test_multi_body_errors.py::test_jsonable_encoder_requiring_error'],
+    11:['fastapi/openapi/utils.py','tests/test_union_body.py::test_item_openapi_schema']
+}
+
+LUIGI_LIST={
+    2:['luigi/contrib/beam_dataflow.py','test/contrib/beam_dataflow_test.py::BeamDataflowTest::test_get_target_path'],
+    3:['luigi/parameter.py','test/parameter_test.py::TestSerializeTupleParameter::testSerialize'],
+    4:['luigi/contrib/redshift.py','test/contrib/redshift_test.py::TestS3CopyToTable::test_s3_copy_with_nonetype_columns'],
+    13:['luigi/file.py','test/file_test.py::FileSystemTest::test_move_to_new_dir'],
+    14:['luigi/scheduler.py','test/central_planner_test.py::CentralPlannerTest::test_no_crash_on_only_disable_hard_timeout'],
+    20:['luigi/task.py','test/task_test.py::TaskTest::test_task_to_str_to_task'],
+    21:['luigi/interface.py','test/interface_test.py::InterfaceTest::test_just_run_main_task_cls'],
+    22:['luigi/scheduler.py','test/scheduler_test.py::SchedulerTest::test_worker_prune_after_init'],
+    23:['luigi/task.py','test/worker_external_task_test.py::WorkerExternalTaskTest::test_external_dependency_completes_later'],
+    25:['luigi/contrib/redshift.py','test/contrib/redshift_test.py::TestS3CopyToTable::test_s3_copy_to_table'],
+    29:['luigi/task_register.py','test/task_test.py::TaskTest::test_external_tasks_loadable'],
+    32:['luigi/task_register.py','test/instance_test.py::InstanceTest::test_unhashable_type']
+}
+
+PANDAS_LIST={
+    2:['pandas/core/indexing.py','pandas/tests/indexing/test_scalar.py::test_at_with_tuple_index_get'],
+    3:['pandas/core/series.py','pandas/tests/series/methods/test_to_period.py::TestToPeriod::test_to_period_raises[unicode]'],
+    6:['pandas/core/indexes/period.py','pandas/tests/groupby/test_size.py::test_size_period_index'],
+    7:['pandas/core/indexes/base.py','pandas/tests/frame/indexing/test_indexing.py::TestDataFrameIndexing::test_reindex_nearest_tz'],
+    10:['pandas/core/arrays/numpy_.py','pandas/tests/series/methods/test_update.py::TestUpdate::test_update_extension_array_series'],
+    11:['pandas/core/dtypes/cast.py','pandas/tests/reshape/test_concat.py::test_duplicate_keys'],
+    12:['pandas/core/frame.py','pandas/tests/frame/methods/test_cov_corr.py::TestDataFrameCov::test_cov_nullable_integer[other_column0]'],
+    13:['pandas/core/dtypes/missing.py','pandas/tests/arrays/categorical/test_missing.py::TestCategoricalMissing::test_use_inf_as_na'],
+    14:['pandas/core/ops/array_ops.py','pandas/tests/arithmetic/test_datetime64.py::TestDatetime64DateOffsetArithmetic::test_dt64arr_add_sub_offset_array'],
+    15:['pandas/core/indexes/datetimes.py','pandas/tests/indexes/datetimes/test_datetime.py::TestDatetimeIndex::test_pickle_after_set_freq'],
+    18:['pandas/core/window/common.py','pandas/tests/window/test_base_indexer.py::test_rolling_forward_skewness'],
+    22:['pandas/core/window/common.py','pandas/tests/window/test_base_indexer.py::test_rolling_forward_window'],
+    26:['pandas/core/arrays/categorical.py','pandas/tests/arrays/categorical/test_analytics.py::TestCategoricalAnalytics::test_min_max_only_nan'],
+    27:['pandas/core/arrays/period.py','pandas/tests/indexes/datetimes/test_to_period.py::TestToPeriod::test_to_period_infer'],
+    30:['pandas/core/tools/datetimes.py','pandas/tests/io/json/test_pandas.py::TestPandasContainer::test_readjson_bool_series'],
+    31:['pandas/core/groupby/groupby.py','pandas/tests/groupby/test_function.py::test_groupby_quantile_nullable_array'],
+    32:['pandas/io/sas/sas_xport.py','pandas/tests/io/sas/test_xport.py::TestXport::test2_binary'],
+    33:['pandas/core/arrays/integer.py','pandas/tests/arrays/integer/test_function.py::test_value_counts_empty'],
+    34:['pandas/core/arrays/datetimes.py','pandas/tests/resample/test_datetime_index.py::test_downsample_dst_at_midnight'],
+    35:['pandas/core/indexes/base.py','pandas/tests/indexes/multi/test_get_level_values.py::test_get_level_values_when_periods'],
+    36:['pandas/core/dtypes/missing.py','pandas/tests/dtypes//test_missing.py::TestIsNA::test_isna_old_datetimelike'],
+    37:['pandas/core/arrays/base.py','pandas/tests/arrays/string_/test_string.py::test_astype_int '],
+    38:['pandas/core/indexes/multi.py','pandas/tests/frame/test_reshape.py::TestDataFrameReshape::test_unstack_long_index'],
+    47:['pandas/core/indexing.py','pandas/tests/frame/indexing/test_indexing.py::TestDataFrameIndexing::test_setitem_list_missing_columns'],
+    48:['pandas/core/arrays/integer.py','pandas/tests/groupby/test_function.py::test_apply_to_nullable_integer_returns_float'],
+    49:['pandas/core/strings.py','pandas/tests/test_strings.py::TestStringMethods::test_repeat_with_null'],
+    51:['pandas/core/indexes/base.py','pandas/tests/reshape/merge/test_merge.py::test_categorical_non_unique_monotonic'],
+    53:['pandas/core/indexes/base.py','pandas/tests/indexing/test_categorical.py::TestCategoricalIndex::test_loc_scalar'],
+    58:['pandas/core/arrays/categorical.py','pandas/tests/arrays/categorical/test_constructors.py::TestCategoricalConstructors::test_from_codes_with_nullable_int'],
+    59:['pandas/core/window/indexers.py','pandas/tests/window/test_pairwise.py::TestPairwise::test_corr_freq_memory_error'],
+    63:['pandas/core/indexing.py','pandas/tests/indexing/test_scalar.py::TestScalar2::test_series_at_raises_type_error'],
+    65:['pandas/io/parsers.py','pandas/tests/io/parser/test_encoding.py::test_binary_mode_file_buffers[c_high-unicode_series.csv-latin-1]'],
+    68:['pandas/core/dtypes/cast.py','pandas/tests/arrays/interval/test_interval.py::TestMethods::test_shift'],
+    69:['pandas/core/indexing.py','pandas/tests/indexes/test_numeric.py::TestFloat64Index::test_lookups_datetimelike_values'],
+    71:['pandas/core/reshape/tile.py','pandas/tests/arrays/test_integer.py::test_cut'],
+    72:['pandas/core/internals/blocks.py','pandas/tests/frame/indexing/test_categorical.py::TestDataFrameIndexingCategorical::test_setitem_single_row_categorical'],
+    76:['pandas/core/dtypes/cast.py','pandas/tests/io/json/test_pandas.py::TestPandasContainer::test_frame_int_overflow'],
+    77:['pandas/core/ops/array_ops.py','pandas/tests/arithmetic/test_array_ops.py::test_na_logical_op_2d'],
+    79:['pandas/core/indexes/base.py','pandas/tests/indexes/datetimes/test_indexing.py::TestDatetimeIndex::test_get_loc'],
+    81:['pandas/core/arrays/masked.py','pandas/tests/arrays/test_integer.py::TestCasting::test_astype_boolean'],
+    84:['pandas/core/indexes/multi.py','pandas/tests/frame/test_reshape.py::TestDataFrameReshape::test_unstack_tuplename_in_multiindex'],
+    85:['pandas/core/indexes/base.py','pandas/tests/groupby/test_apply.py::test_apply_multi_level_name'],
+    86:['pandas/core/indexes/base.py','pandas/tests/reshape/test_pivot.py::TestPivotTable::test_pivot_columns_none_raise_error'],
+    88:['pandas/core/generic.py','pandas/tests/reshape/test_pivot.py::TestPivotTable::test_pivot_table_multiindex_only'],
+    90:['pandas/io/common.py','pandas/tests/io/test_pickle.py::test_pickle_generalurl_read'],
+    96:['pandas/core/arrays/datetimelike.py','pandas/tests/indexes/datetimes/test_date_range.py::test_date_range_with_custom_holidays'],
+    99:['pandas/core/tools/datetimes.py','pandas/tests/indexes/datetimes/test_tools.py::test_nullable_integer_to_datetime'],
+    102:['pandas/core/internals/construction.py','pandas/tests/frame/test_constructors.py::TestDataFrameConstructorWithDatetimeTZ::test_from_2d_ndarray_with_dtype'],
+    103:['pandas/core/groupby/generic.py','pandas/tests/groupby/test_transform.py::test_pct_change'],
+    104:['pandas/core/groupby/groupby.py','pandas/tests/groupby/test_function.py::test_groupby_quantile_with_arraylike_q_and_int_columns'],
+    106:['pandas/core/indexes/base.py','pandas/tests/indexes/multi/test_drop.py::test_drop_with_non_unique_datetime_index_and_invalid_keys'],
+    109:['pandas/core/arrays/categorical.py','pandas/tests/arrays/categorical/test_analytics.py::TestCategoricalAnalytics::test_min_max_ordered_empty'],
+    110:['pandas/core/indexes/base.py','pandas/tests/indexing/test_categorical.py::TestCategoricalIndex::test_loc_with_non_string_categories'],
+    111:['pandas/core/indexes/base.py','pandas/tests/indexing/test_categorical.py::TestCategoricalIndex::test_loc_with_non_string_categories'],
+    112:['pandas/core/indexes/interval.py','pandas/tests/frame/test_analytics.py::TestDataFrameAnalytics::test_round_interval_category_columns'],
+    116:['pandas/core/reshape/merge.py','pandas/tests/reshape/merge/test_merge_asof.py::TestAsOfMerge::test_merge_index_column_tz'],
+    117:['pandas/core/dtypes/missing.py','pandas/tests/series/test_analytics.py::TestSeriesAnalytics::test_count'],
+    118:['pandas/core/reshape/melt.py','pandas/tests/reshape/test_melt.py::TestMelt::test_melt_mixed_int_str_id_vars'],
+    126:['pandas/core/frame.py','pandas/tests/frame/test_combine_concat.py::TestDataFrameConcatCommon::test_append_empty_list'],
+    127:['pandas/core/indexes/base.py','pandas/tests/series/test_timeseries.py::TestTimeSeries::test_pct_change_with_duplicate_axis'],
+    129:['pandas/core/arrays/datetimes.py','pandas/tests/arithmetic/test_timedelta64.py::TestTimedeltaArraylikeAddSubOps::test_td64arr_add_sub_datetimelike_scalar'],
+    130:['pandas/core/groupby/generic.py','pandas/tests/groupby/test_value_counts.py::test_series_groupby_value_counts_with_grouper'],
+    133:['pandas/core/generic.py','pandas/tests/frame/test_missing.py::TestDataFrameInterpolate::test_interp_axis_names'],
+    136:['pandas/core/reshape/merge.py','pandas/tests/reshape/merge/test_merge_asof.py::TestAsOfMerge::test_int_type_tolerance[uint8]'],
+    137:['pandas/core/arrays/categorical.py','pandas/tests/extension/test_categorical.py::TestCasting::test_cast_category_to_extension_dtype'],
+    138:['pandas/core/algorithms.py','pandas/tests/reshape/test_qcut.py::test_qcut_bool_coercion_to_int[Series-assert_series_equal-6]'],
+    140:['pandas/core/indexes/base.py','pandas/tests/groupby/test_apply.py::test_apply_datetime_issue'],
+    142:['pandas/core/algorithms.py','pandas/tests/series/test_analytics.py::TestSeriesAnalytics::test_bool_diff'],
+    146:['pandas/core/dtypes/missing.py','pandas/tests/dtypes/test_missing.py::test_array_equivalent_tzawareness'],
+    150:['pandas/core/dtypes/missing.py','pandas/tests/dtypes/test_missing.py::test_array_equivalent_nested'],
+    152:['pandas/core/series.py','pandas/tests/series/test_combine_concat.py::TestSeriesCombine::test_append_tuples'],
+    155:['pandas/core/window/rolling.py','pandas/tests/window/test_rolling.py::TestRolling::test_rolling_datetime'],
+    157:['pandas/core/reshape/merge.py','pandas/tests/reshape/merge/test_merge_asof.py::TestAsOfMerge::test_timedelta_tolerance_nearest'],
+    158:['pandas/core/common.py','pandas/tests/series/test_alter_axes.py::TestSeriesAlterAxes::test_rename_with_custom_indexer'],
+    160:['pandas/core/computation/expressions.py','pandas/tests/test_expressions.py::TestExpressions::test_frame_series_axis'],
+    162:['pandas/core/indexes/base.py','pandas/tests/reshape/test_pivot.py::TestCrosstab::test_margin_normalize'],
+    163:['pandas/core/window.py','pandas/tests/window/test_rolling.py::TestRolling::test_readonly_array'],
+    168:['pandas/core/groupby/grouper.py','pandas/tests/groupby/test_groupby.py::test_groupby_axis_1'],
+    169:['pandas/core/dtypes/concat.py','pandas/tests/frame/test_quantile.py::TestDataFrameQuantile::test_quantile_empty_no_columns']
+}
+
+SCRAPY_LIST={
+    1:['scrapy/spidermiddlewares/offsite.py','tests.test_spidermiddleware_offsite.TestOffsiteMiddleware4._get_spiderargs'],
+    2:['scrapy/utils/datatypes.py','tests.test_utils_datatypes.LocalCacheTest.test_cache_without_limit'],
+    4:['scrapy/contracts/__init__.py','tests.test_contracts.ContractsManagerTest.test_errback'],
+    9:['scrapy/mail.py','tests.test_mail.MailSenderTest.test_send_single_values_to_and_cc'],
+    15:['scrapy/utils/url.py','tests.test_utils_url.CanonicalizeUrlTest.test_canonicalize_url_idna_exceptions'],
+    17:['scrapy/utils/python.py','tests.test_utils_response.ResponseUtilsTest.test_response_status_message'],
+    18:['scrapy/utils/python.py','tests.test_responsetypes.ResponseTypesTest.test_from_content_disposition'],
+    20:['scrapy/utils/sitemap.py','tests.test_spider.SitemapSpiderTest.test_get_sitemap_urls_from_robotstxt'],
+    21:['scrapy/downloadermiddlewares/robotstxt.py','tests.test_downloadermiddleware_robotstxt.RobotsTxtMiddlewareTest.test_robotstxt_immediate_error'],
+    22:['scrapy/exporters.py','tests.test_exporters.XmlItemExporterTest.test_nonstring_types_item'],
+    23:['scrapy/downloadermiddlewares/httpproxy.py','tests.test_downloadermiddleware_httpproxy.TestDefaultHeadersMiddleware.test_proxy_auth'],
+    27:['scrapy/downloadermiddlewares/redirect.py','tests.test_downloadermiddleware_redirect.RedirectMiddlewareTest.test_request_meta_handling'],
+    29:['scrapy/utils/python.py','tests.test_utils_request.UtilsRequestTest.test_request_httprepr_for_non_http_request'],
+    31:['scrapy/utils/python.py','tests.test_downloadermiddleware_cookies.CookiesMiddlewareTest.test_do_not_break_on_non_utf8_header'],
+    32:['scrapy/utils/log.py','tests.test_crawler.CrawlerProcessTest.test_crawler_process_accepts_dict'],
+    34:['scrapy/item.py','tests.test_item.ItemTest.test_metaclass_with_fields_attribute'],
+    40:['scrapy/utils/python.py','tests.test_exporters.PythonItemExporterTest.test_other_python_types_item']
+}
+
+SPACY_LIST={
+    4:['spacy/cli/converters/conllu2json.py','spacy/tests/regression/test_issue4665.py::test_issue4665'],
+    5:['spacy/language.py','spacy/tests/test_language.py::test_evaluate_no_pipe']
+}
+
+THEFUCK_LIST={
+    4:['thefuck/shells/fish.py','tests/shells/test_fish.py::TestFish::test_get_aliases'],
+    6:['thefuck/rules/git_branch_exists.py','tests/rules/test_git_branch_exists.py::test_get_new_command'],
+    9:['thefuck/rules/git_push.py','tests/rules/test_git_push.py::test_get_new_command'],
+    21:['thefuck/rules/git_fix_stash.py','tests/rules/test_git_fix_stash.py::test_not_match'],
+    22:['thefuck/types.py','tests/test_types.py::TestSortedCorrectedCommandsSequence::test_with_blank'],
+    23:['thefuck/utils.py','tests/test_utils.py::TestCache::test_when_etag_changed']
+}
+
+TORNADO_LIST={
+    7:['tornado/gen.py','tornado.test.ioloop_test.TestIOLoopFutures.test_run_in_executor_native'],
+    9:['tornado/httputil.py','tornado.test.httputil_test.TestUrlConcat.test_url_concat_none_params'],
+    13:['tornado/http1connection.py','tornado.test.http1connection_test.HTTP1ConnectionTest.test_http10_no_content_length'],
+    14:['tornado/ioloop.py','tornado.test.ioloop_test.TestIOLoopCurrent.test_force_current']
+}
+
+TQDM_LIST={
+    1:['tqdm/std.py','tqdm/tests/tests_contrib.py::test_enumerate'],
+    4:['tqdm/_tqdm.py','tqdm/tests/tests_tqdm.py::test_nototal'],
+    5:['tqdm/_tqdm.py','tqdm/tests/tests_tqdm.py::test_bool'],
+    6:['tqdm/_tqdm.py','tqdm/tests/tests_synchronisation.py::test_imap'],
+    7:['tqdm/_main.py','tqdm/tests/tests_main.py::test_main']
+}
+
+YOUTUBE_DL_LIST={
+    4:['youtube_dl/jsinterp.py','test.test_jsinterp.TestJSInterpreter.test_call'],
+    5:['youtube_dl/utils.py','test.test_utils.TestUtil.test_unified_timestamps'],
+    8:['youtube_dl/YoutubeDL.py','test.test_YoutubeDL.TestFormatSelection.test_youtube_format_selection'],
+    9:['youtube_dl/YoutubeDL.py','test.test_YoutubeDL.TestFormatSelection.test_youtube_format_selection'],
+    11:['youtube_dl/utils.py','test.test_utils.TestUtil.test_str_to_int'],
+    12:['youtube_dl/YoutubeDL.py','test.test_YoutubeDL.TestFormatSelection.test_format_selection_string_ops'],
+    16:['youtube_dl/utils.py','test.test_utils.TestUtil.test_dfxp2srt'],
+    17:['youtube_dl/utils.py','test.test_utils.TestUtil.test_cli_bool_option'],
+    22:['youtube_dl/utils.py','test.test_YoutubeDL.TestYoutubeDL.test_match_filter'],
+    28:['youtube_dl/utils.py','test.test_utils.TestUtil.test_unescape_html'],
+    30:['youtube_dl/YoutubeDL.py','test.test_YoutubeDL.TestFormatSelection.test_format_filtering'],
+    33:['youtube_dl/utils.py','test.test_utils.TestUtil.test_parse_iso8601'],
+    37:['youtube_dl/utils.py','test.test_utils.TestUtil.test_uppercase_escpae']
+}
