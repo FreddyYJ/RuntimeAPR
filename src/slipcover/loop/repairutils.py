@@ -154,10 +154,15 @@ def pickle_object(fn:FunctionType,name:str,obj:object,is_global=False,pickled_id
             # ctypes objects cannot be pickled, use object directly
             return PickledObject(name,orig_data=obj,unpickled=f'{type(e)}: {e}')
         
+FLOAT_THRESHOLD=0.01
+
 def compare_object(a:PickledObject,b:PickledObject):
     if a.type==partial and b.type==partial:
         # functools.partial is same as function
         return True
+    elif a.type==float and b.type==float:
+        # Same if they are close enough
+        return abs(pickle.loads(a.data)-pickle.loads(b.data))<FLOAT_THRESHOLD
     elif a.unpickled!='' or b.unpickled!='':
         # Just check type if one of them cannot pickled
         return a.type==b.type
