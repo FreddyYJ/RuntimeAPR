@@ -121,20 +121,29 @@ def pickle_object(fn:FunctionType,name:str,obj:object,is_global=False,pickled_id
         pickled_ids[id(obj.v)]=res
         return res
     elif isinstance(obj,set):
+        # Set object
         pickled_obj=SetObject(name,obj)
         new_set=set()
         for i,elem in enumerate(list(obj)):
-            new_set.add(pickle_object(fn,i,elem,is_global=is_global,pickled_ids=pickled_ids))
+            new_set.add(pickle_object(fn,str(i),elem,is_global=is_global,pickled_ids=pickled_ids))
         pickled_obj.elements=new_set
         pickled_ids[id(obj)]=pickled_obj
         return pickled_obj
-    else:
+    elif isinstance(obj,list) or isinstance(obj,tuple):
+        pickled_obj=PickledObject(name,orig_data=obj)
+        for i,elem in enumerate(obj):
+            pickled_obj.children[str(i)]=pickle_object(fn,str(i),elem,is_global=is_global,pickled_ids=pickled_ids)
+        pickled_ids[id(obj)]=pickled_obj
+        return pickled_obj
+    elif isinstance(obj,dict):
+        pickled_obj=PickledObject(name,orig_data=obj)
+        for key,value in obj.items():
+            pickled_obj.children[str(key)]=pickle_object(fn,str(key),value,is_global=is_global,pickled_ids=pickled_ids)
+        pickled_ids[id(obj)]=pickled_obj
+        return pickled_obj
+    elif hasattr(obj,'__dict__'):
+        # Convert object recursively
         try:
-            data=pickle.dumps(obj)
-            res=PickledObject(name,data,obj)
-            pickled_ids[id(obj)]=res
-            return res
-        except (pickle.PicklingError,ValueError) as e:
             pickled_obj=PickledObject(name,orig_data=obj)
             for attr in dir(obj):
                 try:
@@ -150,6 +159,15 @@ def pickle_object(fn:FunctionType,name:str,obj:object,is_global=False,pickled_id
                     print(f'Error when pickling {attr}: {e}, skip!')
 
             return pickled_obj
+        except Exception as e:
+            # ctypes objects cannot be pickled, use object directly
+            return PickledObject(name,orig_data=obj,unpickled=f'{type(e)}: {e}')
+    else:
+        try:
+            data=pickle.dumps(obj)
+            res=PickledObject(name,data,obj)
+            pickled_ids[id(obj)]=res
+            return res
         except Exception as e:
             # ctypes objects cannot be pickled, use object directly
             return PickledObject(name,orig_data=obj,unpickled=f'{type(e)}: {e}')
