@@ -8,11 +8,11 @@ class FunctionFinderVisitor(ast.NodeVisitor):
         super().__init__()
     
     def visit_FunctionDef(self, node: ast.FunctionDef) -> Any:
-        if node.lineno<=self.buggy_line<=node.end_lineno:
+        if node.lineno-len(node.decorator_list)<=self.buggy_line<=node.end_lineno:
             self.functiondefs.append(node)
     
     def visit_AsyncFunctionDef(self, node: ast.AsyncFunctionDef) -> Any:
-        if node.lineno<=self.buggy_line<=node.end_lineno:
+        if node.lineno-len(node.decorator_list)<=self.buggy_line<=node.end_lineno:
             self.functiondefs.append(node)
     
     def get_funcs(self):
