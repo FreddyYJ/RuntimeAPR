@@ -19,11 +19,12 @@ from .repairutils import BugInformation,prune_default_global_var,is_default_glob
 from ..concolic import ConcolicTracer,get_zvalue,zint,symbolize,ControlDependenceGraph,Block,ConditionTree,ConditionNode,DefUseGraph
 from ..configure import Configure
 from ..concolic.restate import StateReproducer
+from ..concolic.defusegraph import DependencyGraph
 
 is_concolic_execution=False
 
 class RepairloopRunner:
-    def __init__(self, fn:FunctionType, args, kwargs, bug_info:BugInformation):
+    def __init__(self, fn:FunctionType, args, kwargs, bug_info:BugInformation,target_func:ast.FunctionDef):
         """
         :param fn: function to run
         :param args: arguments to pass to the function
@@ -32,6 +33,7 @@ class RepairloopRunner:
         :param global_vars: global variables from buggy function
         """
         self.fn=fn
+        self.target_func=target_func
 
         # For arguments and global variables
         self.args:list=args
@@ -47,8 +49,9 @@ class RepairloopRunner:
         if Configure.debug:
             print(f'Global vars: {self.global_vars_without_default}')
         self.cfg=ControlDependenceGraph(self.fn)
-        def_use_graph:DefUseGraph=DefUseGraph(self.fn)
-        self.defines=def_use_graph.entries
+        # def_use_graph:DefUseGraph=DefUseGraph(self.fn)
+        # self.defines=def_use_graph.entries
+        self.defines:Dict[str,List[str]]=DependencyGraph(self.fn).get_deps()
         self.cond_tree:ConditionTree=ConditionTree(self.cfg.cfg)
         self.skip_global:bool=False # Skip global variables
 
@@ -317,7 +320,7 @@ class RepairloopRunner:
         #     },file,indent=2)
 
         # Mutating buggy inputs to find exact states
-        reproducer=StateReproducer(self.fn,self.bug_info.buggy_args_values,self.bug_info.buggy_global_values,
+        reproducer=StateReproducer(self.fn,self.target_func.args,self.bug_info.buggy_args_values,self.bug_info.buggy_global_values,
                                    self.args,self.kwargs,self.defines)
         reproducer.reproduce()
         exit(0)
@@ -514,7 +517,7 @@ def except_handler(e:Exception):
         _obj=pickle_object(func,name,obj,is_global=True)
         if _obj is not None:
             bug_info.global_vars[name]=_obj
-    runner=RepairloopRunner(func,pos_only+norms+vargs,kwonlys,bug_info)
+    runner=RepairloopRunner(func,pos_only+norms+vargs,kwonlys,bug_info,target_func)
     return runner.loop(e)
 
 __entry_i=0

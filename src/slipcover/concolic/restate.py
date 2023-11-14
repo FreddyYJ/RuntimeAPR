@@ -9,9 +9,11 @@ from copy import deepcopy
 import gast as ast
 
 class StateReproducer:
-    def __init__(self,fn:FunctionType,buggy_local_vars:Dict[str,object],buggy_global_vars:Dict[str,object],
-                 args:List[object],kwargs:Dict[str,object],def_use_chain:List[DefUseGraph.Node]):
+    def __init__(self,fn:FunctionType,args_names,buggy_local_vars:Dict[str,object],buggy_global_vars:Dict[str,object],
+                #  args:List[object],kwargs:Dict[str,object],def_use_chain:List[DefUseGraph.Node]):
+                args:List[object],kwargs:Dict[str,object],def_use_chain:Dict[str,List[str]]):
         self.fn=fn
+        self.args_names=args_names
         self.buggy_local_vars=prune_default_local_var(self.fn,buggy_local_vars)
         self.buggy_global_vars=prune_default_global_var(self.fn,buggy_global_vars)
         self.args=args
@@ -109,10 +111,21 @@ class StateReproducer:
 
         return local_diffs,global_diffs
 
-    def mutate(self,local_vars:Dict[str,object],global_vars:Dict[str,object]):
+    def find_candidate_inputs(self,local_vars:Dict[str,object],global_vars:Dict[str,object]):
         local_diffs,global_diffs=self.is_vars_same(local_vars,global_vars)
         new_args=deepcopy(self.orig_args)
         new_kwargs=deepcopy(self.orig_kwargs)
+
+        pos_args=[]
+        for arg in self.args_names.posonlyargs:
+            pos_args.append(arg.arg)
+        for arg in self.args_names.args:
+            pos_args.append(arg.arg)
+        var_arg=self.args_names.vararg.arg if self.args_names.vararg else None
+        kwonly_args=[]
+        for arg in self.args_names.kwonlyargs:
+            kwonly_args.append(arg.arg)
+        kw_arg=self.args_names.kwarg.arg if self.args_names.kwarg else None
 
         cand_args:Set[str]=set()
         cand_kwargs:Set[str]=set()
@@ -126,15 +139,13 @@ class StateReproducer:
                 else:
                     print(f'Mutate local var {name}: {base_obj} -> {obj}')
                     # Find the corresponding argument, kwargs, globals
-                    for define in self.def_use_chains:
-                        _cand=self._find_use(define,name)
-                        if _cand is not None:
-                            if _cand not in cand_args:
-                                cand_args.add(_cand.node.id)
-                            elif _cand not in cand_kwargs:
-                                cand_kwargs.add(_cand.node.id)
-                            else:
-                                cand_globals.add(_cand.node.id)
+                    for use in self.def_use_chains[name]:
+                        if use.split('.')[0] in pos_args:
+                            cand_args.add(use)
+                        elif use.split('.')[0] in kwonly_args:
+                            cand_kwargs.add(use)
+                        else:
+                            cand_globals.add(use)
 
         if len(global_diffs)!=0:
             print('Mutate global variables...')
@@ -145,16 +156,13 @@ class StateReproducer:
                 else:
                     print(f'Mutate global var {name}: {base_obj} -> {obj}')
                     # Find the corresponding argument, kwargs, globals
-                    for define in self.def_use_chains:
-                        _cand=self._find_use(define,name)
-                        if _cand is not None:
-                            if _cand not in cand_args:
-                                cand_args.add(_cand.node.id)
-                            elif _cand not in cand_kwargs:
-                                cand_kwargs.add(_cand.node.id)
-                            else:
-                                cand_globals.add(_cand.node.id)
-
+                    for use in self.def_use_chains[name]:
+                        if use.split('.')[0] in pos_args:
+                            cand_args.add(use)
+                        elif use.split('.')[0] in kwonly_args:
+                            cand_kwargs.add(use)
+                        else:
+                            cand_globals.add(use)
 
         if len(cand_args)!=0:
             print(f'Candidate args: {cand_args}')
@@ -166,19 +174,6 @@ class StateReproducer:
         # TODO mutate
 
         return new_args,new_kwargs,global_vars
-                        
-    def _find_use(self,node:DefUseGraph.Node,name:str):
-        if isinstance(node.node,ast.gast.Name):
-            if node.node.id ==name:
-                # Found
-                return node
-            
-        # Try children
-        for child in node.children:
-            result=self._find_use(child,name)
-            if result is not None:
-                return result
-        return None
     
     def reproduce(self):
         new_args=deepcopy(self.args)
@@ -193,7 +188,7 @@ class StateReproducer:
                 print(f'States reproduced in trial {trial}')
                 return
             
-            new_args,new_kwargs,new_globals=self.mutate(reproduced_local_vars,reproduced_global_vars)
+            new_args,new_kwargs,new_globals=self.find_candidate_inputs(reproduced_local_vars,reproduced_global_vars)
 
             # TODO run target function to check if the state is same
             exit(0)

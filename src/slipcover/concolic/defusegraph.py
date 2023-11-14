@@ -20,7 +20,68 @@ class FunctionDefFinder(ast.NodeVisitor):
         if node.name==self.funcname and node.lineno>=self.start_line and self.max_start_line<node.lineno:
             self.definition=node
             self.max_start_line=node.lineno
-        
+
+class DependencyGraph:
+    def __init__(self,fn:FunctionType) -> None:
+        filename=fn.__code__.co_filename
+        with open(filename,'r') as f:
+            tree=ast.parse(f.read())
+        func_finder=FunctionDefFinder(fn.__name__,fn.__code__.co_firstlineno)
+        func_finder.visit(tree)
+        self.func_def=func_finder.definition
+
+    def _get_full_attribute_name(self,node:ast.Attribute):
+        if isinstance(node.value,ast.Attribute):
+            return self._get_full_attribute_name(node.value)+'.'+node.attr
+        elif isinstance(node.value,ast.Name):
+            return node.value.id+'.'+node.attr
+        else:
+            raise ValueError(f'Unknown attribute parent value type: {type(node.value)}')
+
+    def get_deps(self):
+        """
+            Original code by https://stackoverflow.com/questions/55712076/compute-the-data-dependency-graph-of-a-python-program
+        """
+        full_graph=dict()
+        for assign in ast.walk(self.func_def):
+            if isinstance(assign, ast.Assign):
+                if isinstance(assign.targets[0],ast.Name):
+                    defs=[]
+
+                    for d in ast.walk(assign):
+                        if isinstance(d,ast.Name):
+                            defs.append(d.id)
+                        elif isinstance(d,ast.Attribute):
+                            defs.append(self._get_full_attribute_name(d))
+
+                    full_graph[assign.targets[0].id]=defs[1:]
+
+                elif isinstance(assign.targets[0],ast.Tuple):
+                    for elts in assign.targets[0].elts:
+                        if isinstance(elts,ast.Name):
+                            defs=[]
+
+                            for d in ast.walk(elts):
+                                if isinstance(d,ast.Name):
+                                    defs.append(d.id)
+                                elif isinstance(d,ast.Attribute):
+                                    defs.append(self._get_full_attribute_name(d))
+
+                            full_graph[elts.id]=defs[1:]
+
+                else:
+                    raise ValueError(f'Unknown assign target type: {type(assign.targets[0])}')
+
+        # Remove duplicate dependencies
+        for var in full_graph:
+            for dep in full_graph[var].copy():
+                for dep2 in full_graph[var].copy():
+                    if dep!=dep2 and dep.startswith(dep2):
+                        if dep2 in full_graph[var]:
+                            full_graph[var].remove(dep2)
+
+        return full_graph
+
 class DefUseGraph:
     class Node:
         def __init__(self,node:ast.AST):
