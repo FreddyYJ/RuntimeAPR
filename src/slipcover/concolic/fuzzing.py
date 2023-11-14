@@ -259,7 +259,7 @@ class Fuzzer:
             trial+=1
 
 
-            path,local_vars,global_vars,exc,line=self.run(new_args,new_kwargs,new_global_vars)
+            local_vars,global_vars,exc,line=self.run(new_args,new_kwargs,new_global_vars)
 
             if isinstance(exc,type(self.exception)) and self.excep_line==line:
                 print('Exception raised, stop fuzzing.')
@@ -368,46 +368,36 @@ class Fuzzer:
         If some global or arguments are not in before_values, use the latest value.
         :param before_values: values to try in this concolic execution
         :return: z3 path constraints, local variables after execution, global variables after execution
+
+        Note: We do not symbolize arguments.
+        Now, we assume that the heap of the arguments are changed, but arguments itself are not changed.
+        e.g. Possible cases: arg.field changed
+                Impossible cases: arg = 0 to arg = 1
         """
-        with ConcolicTracer() as tracer:
-            """
-                Note: We do not symbolize arguments.
-                Now, we assume that the heap of the arguments are changed, but arguments itself are not changed.
-                e.g. Possible cases: arg.field changed
-                     Impossible cases: arg = 0 to arg = 1
-            """
-            # Prune default variables
-            next_globals=prune_default_global_var(self.fn,new_globals)
-            args,kwargs,globals=deepcopy([new_args,new_kwargs,next_globals])
-            for name,obj in globals.items():
-                self.fn.__globals__[name]=obj
+        # Prune default variables
+        next_globals=prune_default_global_var(self.fn,new_globals)
+        args,kwargs,globals=deepcopy([new_args,new_kwargs,next_globals])
+        for name,obj in globals.items():
+            self.fn.__globals__[name]=obj
 
-            try:
-                global is_concolic_execution
-                is_concolic_execution=True
-                result=self.fn(*args, **kwargs)
-            except Exception as _exc:
-                print(f'Exception raised: {type(_exc)}: {_exc}')
-                traceback.print_exception(type(_exc),_exc,_exc.__traceback__)
-                if Configure.debug:
-                    print(f'Decls: {tracer.decls}')
-                print(f'Path: {tracer.path}')
+        try:
+            global is_concolic_execution
+            is_concolic_execution=True
+            result=self.fn(*args, **kwargs)
+        except Exception as _exc:
+            print(f'Exception raised: {type(_exc)}: {_exc}')
+            traceback.print_exception(type(_exc),_exc,_exc.__traceback__)
 
-                tb=_exc.__traceback__
-                innerframes=inspect.getinnerframes(_exc.__traceback__)
-                innerframes.reverse()
-                inner_info:inspect.FrameInfo=innerframes[0]
-                cur_index=0
+            innerframes=inspect.getinnerframes(_exc.__traceback__)
+            innerframes.reverse()
+            inner_info:inspect.FrameInfo=innerframes[0]
+            cur_index=0
 
-                while not inner_info.filename.endswith('.py') or (inner_info.function.startswith('<') and inner_info.function.endswith('>')):
-                    cur_index+=1
-                    inner_info=innerframes[cur_index]
+            while not inner_info.filename.endswith('.py') or (inner_info.function.startswith('<') and inner_info.function.endswith('>')):
+                cur_index+=1
+                inner_info=innerframes[cur_index]
 
 
-                return tracer.path,inner_info.frame.f_locals,inner_info.frame.f_globals,_exc,inner_info.lineno
-            
-            if Configure.debug:
-                print(f'Decls: {tracer.decls}')
-            print(f'Path: {tracer.path}')
-            # self.tried_paths.add(z3.simplify(z3.And(*tracer.path)))
-            return tracer.path,dict(),dict(),None,-1
+            return inner_info.frame.f_locals,inner_info.frame.f_globals,_exc,inner_info.lineno
+        
+        return dict(),dict(),None,-1
