@@ -1,5 +1,6 @@
 from copy import deepcopy
 import inspect
+import json
 import os
 import pickle
 import sys
@@ -14,7 +15,7 @@ import gc
 
 from ..concolic.fuzzing import Fuzzer
 from .funcast import FunctionFinderVisitor
-from .repairutils import BugInformation,prune_default_global_var,is_default_global,compare_object,pickle_object,prune_default_local_var,is_default_local
+from .repairutils import BugInformation,prune_default_global_var,is_default_global,compare_object,pickle_object,prune_default_local_var,is_default_local,convert_json
 from ..concolic import ConcolicTracer,get_zvalue,zint,symbolize,ControlDependenceGraph,Block,ConditionTree,ConditionNode,DefUseGraph
 from ..configure import Configure
 from ..concolic.restate import StateReproducer
@@ -288,6 +289,33 @@ class RepairloopRunner:
             print('Cannot find buggy inputs. Stop.')
             exit(1)
 
+        # # Store buggy inputs to json file
+        # cached_result=dict()
+        # pos_args=[]
+        # for pos_arg in buggy_args:
+        #     convert_json(pos_arg,cached_result)
+        #     pos_args.append(id(pos_arg))
+        # kw_args=dict()
+        # for name,kw_arg in buggy_kwargs.items():
+        #     convert_json(kw_arg,cached_result)
+        #     kw_args[name]=id(kw_arg)
+        # globals=dict()
+        # for name,obj in buggy_globals.items():
+        #     if is_default_global(self.fn,name,obj):
+        #         continue
+        #     convert_json(obj,cached_result)
+        #     globals[name]=id(obj)
+
+        # with open('runtimeapr.json','w') as file:
+        #     json.dump({
+        #         'objects':cached_result,
+        #         'states': {
+        #             'pos_args': pos_args,
+        #             'kw_args': kw_args,
+        #             'globals': globals
+        #         }
+        #     },file,indent=2)
+
         # Mutating buggy inputs to find exact states
         reproducer=StateReproducer(self.fn,self.bug_info.buggy_args_values,self.bug_info.buggy_global_values,
                                    self.args,self.kwargs,self.defines)
@@ -488,3 +516,102 @@ def except_handler(e:Exception):
             bug_info.global_vars[name]=_obj
     runner=RepairloopRunner(func,pos_only+norms+vargs,kwonlys,bug_info)
     return runner.loop(e)
+
+__entry_i=0
+
+def func_entry(glbs:dict):
+    global is_concolic_execution,__entry_i
+    if is_concolic_execution: return
+
+    outerframes=inspect.getouterframes(inspect.currentframe())
+    cur_frame=outerframes[1]
+
+    if 'FUNC_NAME' not in os.environ: return
+    if cur_frame.function!=os.environ['FUNC_NAME']: return
+
+    objects=gc.get_referrers(cur_frame.frame.f_code)
+    func=None
+    for obj in objects:
+        if isinstance(obj,FunctionType) and obj.__name__==cur_frame.function:
+            func=obj
+            break
+    
+    assert func is not None,f'Cannot find function {cur_frame.function} at line {cur_frame.lineno}'
+
+    with open(cur_frame.filename,'r') as file:
+        func_ast=ast.parse(file.read(),cur_frame.filename,'exec')
+    visitor=FunctionFinderVisitor(cur_frame.lineno)
+    visitor.visit(func_ast)
+    target_func=visitor.get_funcs()
+    args=target_func.args
+    # print(args.args[0].arg)
+    # print(args.posonlyargs)
+    # print(args.kwonlyargs[0].arg)
+    # print(args.vararg.arg)
+
+    pos_args=[]
+    for arg in args.posonlyargs:
+        pos_args.append(arg.arg)
+    norm_args=[]
+    for arg in args.args:
+        norm_args.append(arg.arg)
+    var_arg=args.vararg.arg if args.vararg else None
+    kwonly_args=[]
+    for arg in args.kwonlyargs:
+        kwonly_args.append(arg.arg)
+    kw_arg=args.kwarg.arg if args.kwarg else None
+    # func(pos_args, /, norm_args, *var_arg | *, kwonly_args, **kw_arg)
+    
+    bc=Bytecode.from_code(cur_frame.frame.f_code)
+    arg_names=bc.argnames
+    # print(arg_names)
+    # print(inner_info.frame.f_locals)
+    pos_only=[]
+    for arg in pos_args:
+        if arg in cur_frame.frame.f_locals:
+            pos_only.append(cur_frame.frame.f_locals[arg])
+    norms=[]
+    for arg in norm_args:
+        if arg in cur_frame.frame.f_locals:
+            norms.append(cur_frame.frame.f_locals[arg])
+    vargs=[]
+    if var_arg and var_arg in cur_frame.frame.f_locals:
+        assert isinstance(cur_frame.frame.f_locals[var_arg],tuple)
+        for element in cur_frame.frame.f_locals[var_arg]:
+            vargs.append(element)
+    kwonlys={}
+    for arg in kwonly_args:
+        if arg in cur_frame.frame.f_locals:
+            kwonlys[arg]=cur_frame.frame.f_locals[arg]
+    if kw_arg and kw_arg in cur_frame.frame.f_locals:
+        assert isinstance(cur_frame.frame.f_locals[kw_arg],dict)
+        for k,v in cur_frame.frame.f_locals[kw_arg].items():
+            kwonlys[k]=v
+
+    # Store buggy inputs to json file
+    cached_result=dict()
+    pos_args=[]
+    for pos_arg in pos_only+norms:
+        convert_json(pos_arg,cached_result)
+        pos_args.append(id(pos_arg))
+    kw_args=dict()
+    for name,kw_arg in kwonlys.items():
+        convert_json(kw_arg,cached_result)
+        kw_args[name]=id(kw_arg)
+    globals=dict()
+    for name,obj in glbs.items():
+        if is_default_global(func,name,obj):
+            continue
+        convert_json(obj,cached_result)
+        globals[name]=id(obj)
+
+    with open(f'entry-{__entry_i}.json','w') as file:
+        json.dump({
+            'objects':cached_result,
+            'states': {
+                'pos_args': pos_args,
+                'kw_args': kw_args,
+                'globals': globals
+            }
+        },file,indent=2)
+    __entry_i+=1

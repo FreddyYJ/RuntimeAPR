@@ -1,6 +1,7 @@
 from types import CodeType
 from bytecode import Instr,Bytecode,Label,dump_bytecode,Compare
 import sys
+import os
 
 PYTHON_VERSION=sys.version_info[:2]
 
@@ -42,272 +43,7 @@ class Instrumenter:
         
         # assert False, 'Except block not found in code stack'
         return set()
-
-    def _try_except_exist(self):
-        for instr in self.block_stack:
-            if isinstance(instr,Instr) and instr.name=='SETUP_FINALLY':
-                for code in self.code_stack:
-                    if instr in code:
-                        return True
-        return False
-    
-    def __generate_try_except(self,orig_bc:Bytecode,index:int,instr:Instr,no_orig_label:bool=False):
-        try_block=[]
-        except_block=[]
-        cur_lineno=instr.lineno
-
-        dummy_label=Label()  # Unmatch exceptions (Maybe dummy?)
-        except_exception_label=Label()  # Exception in except block
-        except_label=Label()
-
-        # Find POP_TOPs after function call and remaining instructions
-        pop_tops=[]
-        remain_instrs=[]
-        is_finished=False
-        next_label=None
-        for instr2 in orig_bc[index+1:]:
-            if isinstance(instr2,Instr) and instr2.name=='POP_TOP' and not is_finished:
-                pop_tops.append(instr2)
-            elif isinstance(instr2,Label):
-                next_label=instr2
-                break
-            else:
-                is_finished=True
-                remain_instrs.append(instr2)
-
-        # Create try
-        orig_label=Label()
-        try_block.append(Instr('SETUP_FINALLY',except_label, lineno=cur_lineno))  # Declare try block
-        try_block.append(instr)  # CALL_FUNCTION
-        try_block+=pop_tops    # POP_TOPs: When ignore return value (length is 0 or 1)
-        try_block.append(Instr('POP_BLOCK', lineno=cur_lineno))  # Pop try block
-        if len(remain_instrs)==0:
-            # If no remaining instructions, jump to next label
-            self.next_label=next_label
-            try_block.append(Instr('JUMP_ABSOLUTE', self.next_label, lineno=cur_lineno))
-        elif len(remain_instrs)==1 and isinstance(remain_instrs[0],Instr) and (remain_instrs[0].name=='CALL_FUNCTION' or \
-                                                        remain_instrs[0].name=='CALL_FUNCTION_KW' or \
-                                                        remain_instrs[0].name=='CALL_FUNCTION_EX' or \
-                                                        remain_instrs[0].name=='CALL_METHOD'):
-            # If next instruction is function call, generate nested try-except
-            _try_block,_except_block=self.__generate_try_except(orig_bc,index+1,remain_instrs[0],no_orig_label=True)
-            try_block+=_try_block
-            except_block+=_except_block
-            self.skip_next_insert=True
-        elif len(remain_instrs)==1 and isinstance(remain_instrs[0],Instr) and remain_instrs[0].name!='JUMP_ABSOLUTE':
-            # Add remaining instrs directly if next instr is not Jump
-            try_block.append(remain_instrs[0])
-            self.next_label=next_label
-            self.skip_next_insert=True
-        elif len(remain_instrs)==1:
-            # Add Jump directly if next instr is Jump
-            try_block.append(remain_instrs[0])
-            self.next_label=None
-            self.skip_next_insert=True
-        else:
-            # Add POP_TOPs and proceed to next instructions
-            if len(pop_tops)>0:
-                self.delta=len(pop_tops)
-            try_block.append(Instr('JUMP_ABSOLUTE', orig_label, lineno=cur_lineno))
-
-        # Create remaining instructions
-        if len(remain_instrs)>1 and not no_orig_label:
-            try_block.append(orig_label)
-
-        # Except block
-        for excps in self.handled_exceptions:
-            # Raise original exception if it is already handled
-            except_block.append(except_label)
-            except_label=Label()
-            except_block.append(Instr('DUP_TOP',lineno=cur_lineno))
-            except_block.append(Instr('LOAD_GLOBAL', excps, lineno=cur_lineno))
-            if PYTHON_VERSION[1]<=8:
-                except_block.append(Instr('COMPARE_OP', Compare.EXC_MATCH, lineno=cur_lineno))
-                except_block.append(Instr('POP_JUMP_IF_FALSE', except_label, lineno=cur_lineno))
-            else:
-                except_block.append(Instr('JUMP_IF_NOT_EXC_MATCH',except_label, lineno=cur_lineno)) # Jump if current Exception is not Exception
-            except_block.append(Instr('POP_TOP', lineno=cur_lineno))
-            except_block.append(Instr('POP_TOP', lineno=cur_lineno))
-            except_block.append(Instr('POP_TOP', lineno=cur_lineno))
-            except_block.append(Instr('RAISE_VARARGS',0, lineno=cur_lineno))
-            except_block.append(Instr('POP_EXCEPT', lineno=cur_lineno))
-
-        # Main exception block
-        except_block.append(except_label)
-        except_block.append(Instr('DUP_TOP',lineno=cur_lineno))
-        except_block.append(Instr('LOAD_GLOBAL', 'Exception', lineno=cur_lineno))
-        if PYTHON_VERSION[1]<=8:
-            except_block.append(Instr('COMPARE_OP', Compare.EXC_MATCH, lineno=cur_lineno))
-            except_block.append(Instr('POP_JUMP_IF_FALSE', dummy_label, lineno=cur_lineno))
-        else:
-            except_block.append(Instr('JUMP_IF_NOT_EXC_MATCH',dummy_label, lineno=cur_lineno)) # Jump if current Exception is not Exception
-        except_block.append(Instr('POP_TOP', lineno=cur_lineno))
-        if self.is_script_mode:
-            except_block.append(Instr('STORE_NAME', '_sc_e', lineno=cur_lineno))
-        else:
-            except_block.append(Instr('STORE_FAST', '_sc_e', lineno=cur_lineno))
-        except_block.append(Instr('POP_TOP', lineno=cur_lineno))  # Until now: except Exception as _sc_e:
-
-        except_block.append(Instr('SETUP_FINALLY',except_exception_label, lineno=cur_lineno)) # Exception in except block
-        if self.throw_exception_when_error:  # Raise original exception if option specified
-            except_block.append(Instr('RAISE_VARARGS',0, lineno=cur_lineno))
-        except_block.append(Instr('LOAD_CONST',0,lineno=instr.lineno))
-        except_block.append(Instr('LOAD_CONST',('except_handler',),lineno=instr.lineno))
-        except_block.append(Instr('IMPORT_NAME','slipcover.loop',lineno=instr.lineno))
-        except_block.append(Instr('IMPORT_FROM','except_handler',lineno=instr.lineno))
-        if self.is_script_mode:
-            except_block.append(Instr('STORE_NAME', 'except_handler', lineno=cur_lineno))
-        else:
-            except_block.append(Instr('STORE_FAST', 'except_handler', lineno=cur_lineno))
-        except_block.append(Instr('POP_TOP',lineno=instr.lineno))  # Until now: from slipcover.loop import except_handler
-
-        if self.is_script_mode:
-            except_block.append(Instr('LOAD_NAME','except_handler', lineno=cur_lineno))
-        else:
-            except_block.append(Instr('LOAD_FAST','except_handler', lineno=cur_lineno))
-        if self.is_script_mode:
-            except_block.append(Instr('LOAD_NAME', '_sc_e', lineno=cur_lineno))
-        else:
-            except_block.append(Instr('LOAD_FAST', '_sc_e', lineno=cur_lineno))    
-        except_block.append(Instr('CALL_FUNCTION',1, lineno=cur_lineno))
-        except_block.append(Instr('POP_TOP', lineno=cur_lineno))  # Until now: except_handler(_sc_e)
-        # TODO: Handle return value from repair loop
-
-        # # Print exception
-        # if self.is_script_mode:
-        #     except_block.append(Instr('LOAD_NAME', 'print', lineno=cur_lineno))
-        # else:
-        #     except_block.append(Instr('LOAD_GLOBAL', 'print', lineno=cur_lineno))
-        # if self.is_script_mode:
-        #     except_block.append(Instr('LOAD_NAME', '_sc_e', lineno=cur_lineno))
-        # else:
-        #     except_block.append(Instr('LOAD_FAST', '_sc_e', lineno=cur_lineno))
-        # except_block.append(Instr('CALL_FUNCTION', 1, lineno=cur_lineno))
-        # except_block.append(Instr('POP_TOP', lineno=cur_lineno)) # Pop return
-
-        except_block.append(Instr('POP_BLOCK', lineno=cur_lineno)) # Pop except block
-        except_block.append(Instr('POP_EXCEPT', lineno=cur_lineno)) # Pop current Exception
-
-        # Delete _sc_e
-        except_block.append(Instr('LOAD_CONST', None, lineno=cur_lineno))
-        if self.is_script_mode:
-            except_block.append(Instr('STORE_NAME', '_sc_e', lineno=cur_lineno))
-            except_block.append(Instr('DELETE_NAME', '_sc_e', lineno=cur_lineno))
-        else:
-            except_block.append(Instr('STORE_FAST', '_sc_e', lineno=cur_lineno))
-            except_block.append(Instr('DELETE_FAST', '_sc_e', lineno=cur_lineno))
-
-        # Jump to next instruction
-        if len(remain_instrs)==0 and self.next_label is not None:
-            except_block.append(Instr('JUMP_ABSOLUTE', self.next_label, lineno=cur_lineno))
-            self.next_label=None
-        elif len(remain_instrs)==1:
-            if remain_instrs[0].name!='JUMP_ABSOLUTE' and self.next_label is not None:
-                except_block.append(Instr('JUMP_ABSOLUTE', self.next_label, lineno=cur_lineno))
-                self.next_label=None
-            else:
-                except_block.append(remain_instrs[0])
-        else:
-            except_block.append(Instr('JUMP_ABSOLUTE', orig_label, lineno=cur_lineno))
-
-        # Create dummy and except_exception block
-        except_block.append(dummy_label)  # Not handled exceptions
-        if PYTHON_VERSION[1]<=8:
-            except_block.append(Instr('POP_TOP', lineno=cur_lineno))
-            except_block.append(Instr('POP_TOP', lineno=cur_lineno))
-            except_block.append(Instr('POP_TOP', lineno=cur_lineno))
-            except_block.append(Instr('RAISE_VARARGS',0, lineno=cur_lineno))
-        else:
-            except_block.append(Instr('RERAISE',1, lineno=cur_lineno))
-
-        except_block.append(except_exception_label)  # Exception in except block
-        if PYTHON_VERSION[1]<=8:
-            except_block.append(Instr('POP_TOP', lineno=cur_lineno))
-            except_block.append(Instr('POP_TOP', lineno=cur_lineno))
-            except_block.append(Instr('POP_TOP', lineno=cur_lineno))
-            except_block.append(Instr('RAISE_VARARGS',0, lineno=cur_lineno))
-        else:
-            except_block.append(Instr('LOAD_CONST',None, lineno=cur_lineno))
-            if self.is_script_mode:
-                except_block.append(Instr('STORE_NAME','_sc_e', lineno=cur_lineno))
-                except_block.append(Instr('DELETE_NAME','_sc_e', lineno=cur_lineno))
-            else:
-                except_block.append(Instr('STORE_FAST','_sc_e', lineno=cur_lineno))
-                except_block.append(Instr('DELETE_FAST','_sc_e', lineno=cur_lineno))
-            except_block.append(Instr('RERAISE',0, lineno=cur_lineno))
         
-        return try_block,except_block
-
-    def insert_try_except_old(self,code:CodeType):
-        bc=Bytecode.from_code(code)
-        # Skip if already instrumented
-        if isinstance(bc[0],Instr) and bc[0].name=='LOAD_CONST' and bc[0].arg=='__runtime_apr__':
-            return code
-        
-        self.code_stack.append(bc)
-        
-        # print(code.co_firstlineno)
-        # dump_bytecode(bc,lineno=True)
-        new_bc=[Instr('LOAD_CONST','__runtime_apr__',lineno=1)]
-        except_bc=[]
-        self.skip_next_insert=False
-        self.delta=0
-        for i,instr in enumerate(bc):
-            # Update block stack to handle try-except is already exist
-            if isinstance(instr,Instr) and instr.name in ('SETUP_ASYNC_WITH','SETUP_WITH','SETUP_FINALLY','DUP_TOP'):
-                self.block_stack.append(instr)
-            elif isinstance(instr,Instr) and instr.name=='POP_BLOCK':
-                if len(self.block_stack)==0:
-                    dump_bytecode(bc)
-                self.block_stack.pop()
-
-            if self.skip_next_insert:
-                self.skip_next_insert=False
-            elif isinstance(instr,Instr) and (instr.name=='CALL_FUNCTION' or instr.name=='CALL_FUNCTION_KW' or \
-                                            instr.name=='CALL_FUNCTION_EX' or instr.name=='CALL_METHOD'):
-                self.handled_exceptions.clear()
-                if self._try_except_exist():
-                    for block in self.block_stack:
-                        if block.name=='SETUP_FINALLY':
-                            handled_exceptions=self._get_handled_exception(block)
-                            for excps in handled_exceptions:
-                                self.handled_exceptions.add(excps)
-                    if len(self.handled_exceptions)==0 or (len(self.handled_exceptions) and 'Exception' in self.handled_exceptions):
-                        # Every exception is handled, do not instrument
-                        new_bc.append(instr)
-                        continue
-
-                try_block,except_block=self.__generate_try_except(bc,i,instr)
-                new_bc+=try_block  # Replace function call with try block
-                except_bc+=except_block  # Store except blocks sepeerately to insert at the end of the bytecode
-            elif self.delta>0:
-                self.delta-=1
-            elif isinstance(instr,Instr) and instr.name=='LOAD_CONST' and isinstance(instr.arg,CodeType) and \
-                        instr.arg.co_filename==code.co_filename and '__runtime_apr__' not in instr.arg.co_consts:
-                # Instrument nested CodeType
-                new_bc.append(Instr('LOAD_CONST',self.insert_try_except_old(instr.arg),lineno=instr.lineno))
-            else:
-                new_bc.append(instr)
-                    
-        # We insert except blocks at the end of bytecode
-        new_bytecode=Bytecode(new_bc+except_bc)
-        new_bytecode._copy_attr_from(bc)
-        # print('--------------')
-        # dump_bytecode(new_bytecode,lineno=True)
-        try:
-            new_code=new_bytecode.to_code()
-            # Add new variables
-            new_code.replace(co_varnames=tuple(list(new_code.co_varnames)+['_sc_e','Exception']))
-        except:
-            print(code.co_filename)
-            dump_bytecode(bc,lineno=True)
-            print('------------------')
-            dump_bytecode(new_bytecode,lineno=True)
-            raise
-
-        self.code_stack.pop()
-        return new_code
-    
     def insert_try_except(self,code:CodeType):
         bc=Bytecode.from_code(code)
         is_global=bc.name=='<module>'
@@ -326,6 +62,28 @@ class Instrumenter:
         dummy_label=Label()
         except_exception_label=Label()
 
+        # # TODO: Store func entry: remove later
+        # if 'FUNC_NAME' in os.environ:
+        #     if bc.name.endswith(os.environ['FUNC_NAME']):
+        #         new_bc.append(Instr('LOAD_CONST',0,lineno=cur_lineno))
+        #         new_bc.append(Instr('LOAD_CONST',('func_entry',),lineno=cur_lineno))
+        #         new_bc.append(Instr('IMPORT_NAME','slipcover.loop.repairloop',lineno=cur_lineno))
+        #         new_bc.append(Instr('IMPORT_FROM','func_entry',lineno=cur_lineno))
+        #         if is_global:
+        #             new_bc.append(Instr('STORE_NAME', 'func_entry', lineno=cur_lineno))
+        #         else:
+        #             new_bc.append(Instr('STORE_FAST', 'func_entry', lineno=cur_lineno))
+        #         new_bc.append(Instr('POP_TOP',lineno=cur_lineno))
+        #         if is_global:
+        #             new_bc.append(Instr('LOAD_NAME','func_entry', lineno=cur_lineno))
+        #         else:
+        #             new_bc.append(Instr('LOAD_FAST','func_entry', lineno=cur_lineno))
+        #         new_bc.append(Instr('LOAD_GLOBAL','globals', lineno=cur_lineno))
+        #         new_bc.append(Instr('CALL_FUNCTION',0, lineno=cur_lineno))
+        #         new_bc.append(Instr('CALL_FUNCTION',1, lineno=cur_lineno))
+        #         new_bc.append(Instr('POP_TOP', lineno=cur_lineno))  # Until now: func_entry(globals())
+
+        # Entry try block
         new_bc.append(Instr('SETUP_FINALLY',except_label, lineno=cur_lineno))  # Declare try block
         for instr in bc:
             if isinstance(instr,Instr) and instr.name=='LOAD_CONST' and isinstance(instr.arg,CodeType) and \

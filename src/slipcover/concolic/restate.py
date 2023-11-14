@@ -12,15 +12,13 @@ class StateReproducer:
     def __init__(self,fn:FunctionType,buggy_local_vars:Dict[str,object],buggy_global_vars:Dict[str,object],
                  args:List[object],kwargs:Dict[str,object],def_use_chain:List[DefUseGraph.Node]):
         self.fn=fn
-        self.buggy_local_vars=buggy_local_vars
-        self.buggy_global_vars=buggy_global_vars
+        self.buggy_local_vars=prune_default_local_var(self.fn,buggy_local_vars)
+        self.buggy_global_vars=prune_default_global_var(self.fn,buggy_global_vars)
         self.args=args
         self.orig_args=args
         self.kwargs=kwargs
         self.orig_kwargs=kwargs
         self.def_use_chains=def_use_chain
-
-        self.reproduced_local_vars,self.reproduced_global_vars=self.run(args,kwargs,buggy_global_vars)
 
     def run(self,new_args:List[object],new_kwargs:Dict[str,object],new_globals:Dict[str,object]):
         # Prune default variables
@@ -183,8 +181,19 @@ class StateReproducer:
         return None
     
     def reproduce(self):
+        new_args=deepcopy(self.args)
+        new_kwargs=deepcopy(self.kwargs)
+        new_globals=deepcopy(self.buggy_global_vars)
+
         for trial in range(1,101):
-            new_args,new_kwargs,new_globals=self.mutate(self.reproduced_local_vars,self.reproduced_global_vars)
+            reproduced_local_vars,reproduced_global_vars=self.run(new_args,new_kwargs,new_globals)
+
+            local_diffs,global_diffs=self.is_vars_same(prune_default_local_var(self.fn,reproduced_local_vars),prune_default_global_var(self.fn,reproduced_global_vars))
+            if len(local_diffs)==0 and len(global_diffs)==0:
+                print(f'States reproduced in trial {trial}')
+                return
+            
+            new_args,new_kwargs,new_globals=self.mutate(reproduced_local_vars,reproduced_global_vars)
 
             # TODO run target function to check if the state is same
             exit(0)

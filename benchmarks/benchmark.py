@@ -61,8 +61,8 @@ BLACK_LIST={
 }
 
 FASTAPI_LIST={
-    3:['fastapi/routing.py','tests/test_serialize_response_model.py::test_valid','get_request_handler'],
-    7:['fastapi/applications.py','tests/test_multi_body_errors.py::test_jsonable_encoder_requiring_error','FastAPI.__call__'],
+    # 3:['fastapi/routing.py','tests/test_serialize_response_model.py::test_valid','get_request_handler'],
+    # 7:['fastapi/applications.py','tests/test_multi_body_errors.py::test_jsonable_encoder_requiring_error','FastAPI.__call__'],
     11:['fastapi/openapi/utils.py','tests/test_union_body.py::test_item_openapi_schema','get_openapi_operation_parameters']
 }
 
@@ -173,7 +173,7 @@ SCRAPY_LIST={
     18:['scrapy/utils/python.py','tests.test_responsetypes.ResponseTypesTest.test_from_content_disposition','to_unicode'],
     20:['scrapy/utils/sitemap.py','tests.test_spider.SitemapSpiderTest.test_get_sitemap_urls_from_robotstxt','sitemap_urls_from_robots'],
     21:['scrapy/downloadermiddlewares/robotstxt.py','tests.test_downloadermiddleware_robotstxt.RobotsTxtMiddlewareTest.test_robotstxt_immediate_error','RobotsTxtMiddleware.robot_parser'],
-    22:['scrapy/exporters.py','tests.test_exporters.XmlItemExporterTest.test_nonstring_types_item','XmlItemExporter'],
+    22:['scrapy/exporters.py','tests.test_exporters.XmlItemExporterTest.test_nonstring_types_item','XmlItemExporter.__init__'],
     23:['scrapy/downloadermiddlewares/httpproxy.py','tests.test_downloadermiddleware_httpproxy.TestDefaultHeadersMiddleware.test_proxy_auth','HttpProxyMiddleware._get_proxy'],
     27:['scrapy/downloadermiddlewares/redirect.py','tests.test_downloadermiddleware_redirect.RedirectMiddlewareTest.test_request_meta_handling','RedirectMiddleware.process_response'],
     29:['scrapy/utils/python.py','tests.test_utils_request.UtilsRequestTest.test_request_httprepr_for_non_http_request','to_bytes'],

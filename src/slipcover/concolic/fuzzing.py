@@ -311,8 +311,10 @@ class Fuzzer:
                 local_diffs[name]=(obj,None)
                 continue
             
-            _obj=pickle_object(self.fn,name,obj)
-            base_obj=pickle_object(self.fn,name,self.local_vars[name])
+            pickled_objs=dict()
+            _obj=pickle_object(self.fn,name,obj,pickled_ids=pickled_objs)
+            pickled_objs=dict()
+            base_obj=pickle_object(self.fn,name,self.local_vars[name],pickled_ids=pickled_objs)
             if _obj is not None:
                 _is_same=compare_object(_obj,base_obj)
                 if not _is_same:
@@ -337,8 +339,10 @@ class Fuzzer:
                     global_diffs[name]=(obj,None)
                     continue
 
-                _obj=pickle_object(self.fn,name,obj,is_global=True)
-                base_obj=pickle_object(self.fn,name,self.global_vars[name],is_global=True)
+                pickled_objs=dict()
+                _obj=pickle_object(self.fn,name,obj,is_global=True,pickled_ids=pickled_objs)
+                pickled_objs=dict()
+                base_obj=pickle_object(self.fn,name,self.global_vars[name],is_global=True,pickled_ids=pickled_objs)
                 if _obj is not None:
                     _is_same=compare_object(_obj,base_obj)
                     if not _is_same:

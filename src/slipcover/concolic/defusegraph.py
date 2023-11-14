@@ -80,7 +80,7 @@ class DefUseGraph:
         # for leaf in self.leaves:
         #     print(str(leaf))
 
-    def _gen_graph(self,use) -> "DefUseGraph.Node":
+    def _gen_graph(self,use,recursive=1) -> "DefUseGraph.Node":
         cur_node=DefUseGraph.Node(use.node)
         if cur_node not in self.bodies:
             # Update children
@@ -90,9 +90,11 @@ class DefUseGraph:
                     continue
                 if child.node.lineno<self.func_def.lineno or child.node.end_lineno>self.func_def.end_lineno:
                     continue
-                child_node=self._gen_graph(child)
-                cur_node.children.add(child_node)
-                child_node.parents.add(cur_node)
+                
+                if recursive<=200:
+                    child_node=self._gen_graph(child,recursive=recursive+1)
+                    cur_node.children.add(child_node)
+                    child_node.parents.add(cur_node)
 
             self.bodies.append(cur_node)
 

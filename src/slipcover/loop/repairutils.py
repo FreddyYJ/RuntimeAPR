@@ -113,9 +113,10 @@ pickle._Pickler.dispatch[zstr]=pickle._Pickler.dispatch[str]
 pickle._Pickler.dispatch[zfloat]=pickle._Pickler.dispatch[float]
 pickle.dumps=pickle._dumps
 
-def pickle_object(fn:FunctionType,name:str,obj:object,is_global=False,pickled_ids:Dict[int,PickledObject]=dict()):
-    if id(obj) in pickled_ids:
-        return pickled_ids[id(obj)]
+def pickle_object(fn:FunctionType,name:str,obj:object,is_global=False,pickled_ids:Dict[int,PickledObject]=dict(),recursive=1):
+    if recursive>200:
+        return PickledObject(name,unpickled=f'recursive limit: {id(obj)}')
+    
     if type(obj) in (zbool,zint,zstr,zfloat):
         res=PickledObject(name,pickle.dumps(obj.v),obj.v)
         pickled_ids[id(obj.v)]=res
@@ -125,20 +126,20 @@ def pickle_object(fn:FunctionType,name:str,obj:object,is_global=False,pickled_id
         pickled_obj=SetObject(name,obj)
         new_set=set()
         for i,elem in enumerate(list(obj)):
-            new_set.add(pickle_object(fn,str(i),elem,is_global=is_global,pickled_ids=pickled_ids))
+            new_set.add(pickle_object(fn,str(i),elem,is_global=is_global,pickled_ids=pickled_ids,recursive=recursive+1))
         pickled_obj.elements=new_set
         pickled_ids[id(obj)]=pickled_obj
         return pickled_obj
     elif isinstance(obj,list) or isinstance(obj,tuple):
         pickled_obj=PickledObject(name,orig_data=obj)
         for i,elem in enumerate(obj):
-            pickled_obj.children[str(i)]=pickle_object(fn,str(i),elem,is_global=is_global,pickled_ids=pickled_ids)
+            pickled_obj.children[str(i)]=pickle_object(fn,str(i),elem,is_global=is_global,pickled_ids=pickled_ids,recursive=recursive+1)
         pickled_ids[id(obj)]=pickled_obj
         return pickled_obj
     elif isinstance(obj,dict):
         pickled_obj=PickledObject(name,orig_data=obj)
         for key,value in obj.items():
-            pickled_obj.children[str(key)]=pickle_object(fn,str(key),value,is_global=is_global,pickled_ids=pickled_ids)
+            pickled_obj.children[str(key)]=pickle_object(fn,str(key),value,is_global=is_global,pickled_ids=pickled_ids,recursive=recursive+1)
         pickled_ids[id(obj)]=pickled_obj
         return pickled_obj
     elif hasattr(obj,'__dict__'):
@@ -151,13 +152,14 @@ def pickle_object(fn:FunctionType,name:str,obj:object,is_global=False,pickled_id
                             (not is_global and is_default_local(fn,attr,getattr(obj,attr))):
                         continue
                     else:
-                        attr_obj=pickle_object(fn,attr,getattr(obj,attr),is_global=is_global,pickled_ids=pickled_ids)
+                        attr_obj=pickle_object(fn,attr,getattr(obj,attr),is_global=is_global,pickled_ids=pickled_ids,recursive=recursive+1)
                         pickled_ids[id(getattr(obj,attr))]=attr_obj
                         if attr_obj is not None:
                             pickled_obj.children[attr]=attr_obj
                 except Exception as e:
                     print(f'Error when pickling {attr}: {e}, skip!')
 
+            pickled_ids[id(obj)]=pickled_obj
             return pickled_obj
         except Exception as e:
             # ctypes objects cannot be pickled, use object directly
@@ -221,3 +223,51 @@ def compare_object(a:PickledObject,b:PickledObject):
                     else:
                         return False
                 return True
+            
+def convert_json(obj:object,cached_objects:dict,recursion=1):
+    if recursion>200:
+        return
+    
+    if id(obj) not in cached_objects:
+        if isinstance(obj,int) or isinstance(obj,float) or isinstance(obj,str):
+            output_obj={
+                'type':type(obj).__name__,
+                'value':obj
+            }
+        elif isinstance(obj,list) or isinstance(obj,tuple) or isinstance(obj,set):
+            output_obj={
+                'type':type(obj).__name__,
+                'value':[]
+            }
+            for item in obj:
+                convert_json(item,cached_objects,recursion+1)
+                output_obj['value'].append(id(item))
+        elif isinstance(obj,dict):
+            output_obj={
+                'type':type(obj).__name__,
+                'value':{}
+            }
+            for key,value in obj.items():
+                convert_json(key,cached_objects,recursion+1)
+                convert_json(value,cached_objects,recursion+1)
+                output_obj['value'][id(key)]=id(value)
+        elif isinstance(obj,bytes):
+            output_obj={
+                'type':type(obj).__name__,
+                'value':str(obj)
+            }
+        elif hasattr(obj,'__dict__'):
+            output_obj={
+                'type':type(obj).__name__,
+                'value':{}
+            }
+            for key,value in obj.__dict__.items():
+                convert_json(value,cached_objects,recursion+1)
+                output_obj['value'][key]=id(value)
+        else:
+            output_obj={
+                'type':type(obj).__name__,
+                'value':str(obj)
+            }
+    
+        cached_objects[id(obj)]=output_obj
