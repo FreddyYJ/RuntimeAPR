@@ -50,10 +50,16 @@ class Fuzzer:
             
             elif isinstance(obj,int):
                 # For integer object, flip a random bit
-                MAX_INT_BIT=64
-                bit=random.randint(0,MAX_INT_BIT-1)
-                continue_mutate=False
-                return obj^(1<<bit)
+                _r=random.randint(0,2)
+                if _r==0:
+                    MAX_INT_BIT=64
+                    bit=random.randint(0,MAX_INT_BIT-1)
+                    continue_mutate=False
+                    return obj^(1<<bit)
+                elif _r==1:
+                    return obj+1
+                else:
+                    return obj-1
             
             elif isinstance(obj,str):
                 # For str object, erase/insert/mutate a random character
