@@ -4,6 +4,8 @@ from typing import Any, List, Set
 import gast as ast
 import beniget
 
+from ..configure import Configure
+
 class FunctionDefFinder(ast.NodeVisitor):
     def __init__(self,funcname:str,start_line:int) -> None:
         self.funcname=funcname
@@ -68,6 +70,17 @@ class DependencyGraph:
                                     defs.append(self._get_full_attribute_name(d))
 
                             full_graph[elts.id]=defs[1:]
+                
+                elif isinstance(assign.targets[0],ast.Attribute):
+                    defs=[]
+
+                    for d in ast.walk(assign.targets[0]):
+                        if isinstance(d,ast.Name):
+                            defs.append(d.id)
+                        elif isinstance(d,ast.Attribute):
+                            defs.append(self._get_full_attribute_name(d))
+
+                    full_graph[self._get_full_attribute_name(assign.targets[0])]=defs[1:]
 
                 else:
                     raise ValueError(f'Unknown assign target type: {type(assign.targets[0])}')
@@ -152,7 +165,7 @@ class DefUseGraph:
                 if child.node.lineno<self.func_def.lineno or child.node.end_lineno>self.func_def.end_lineno:
                     continue
                 
-                if recursive<=200:
+                if recursive<=Configure.max_recursive:
                     child_node=self._gen_graph(child,recursive=recursive+1)
                     cur_node.children.add(child_node)
                     child_node.parents.add(cur_node)

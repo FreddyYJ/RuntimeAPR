@@ -6,6 +6,7 @@ import pickle
 from functools import partial
 
 from ..concolic import zint,zbool,zstr,zfloat
+from ..configure import Configure
 
 class BugInformation:
     def __init__(self,buggy_line,buggy_func,buggy_args_values,buggy_global_values) -> None:
@@ -114,7 +115,7 @@ pickle._Pickler.dispatch[zfloat]=pickle._Pickler.dispatch[float]
 pickle.dumps=pickle._dumps
 
 def pickle_object(fn:FunctionType,name:str,obj:object,is_global=False,pickled_ids:Dict[int,PickledObject]=dict(),recursive=1):
-    if recursive>200:
+    if recursive>Configure.max_recursive:
         return PickledObject(name,unpickled=f'recursive limit: {id(obj)}')
     
     if type(obj) in (zbool,zint,zstr,zfloat):
@@ -225,7 +226,7 @@ def compare_object(a:PickledObject,b:PickledObject):
                 return True
             
 def convert_json(obj:object,cached_objects:dict,recursion=1):
-    if recursion>200:
+    if recursion>Configure.max_recursive:
         return
     
     if id(obj) not in cached_objects:

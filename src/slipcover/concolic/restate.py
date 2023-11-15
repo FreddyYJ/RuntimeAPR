@@ -171,9 +171,7 @@ class StateReproducer:
         if len(cand_globals)!=0:
             print(f'Candidate globals: {cand_globals}')
 
-        # TODO mutate
-
-        return new_args,new_kwargs,global_vars
+        return cand_args,cand_kwargs,cand_globals
     
     def reproduce(self):
         new_args=deepcopy(self.args)
@@ -188,7 +186,7 @@ class StateReproducer:
                 print(f'States reproduced in trial {trial}')
                 return
             
-            new_args,new_kwargs,new_globals=self.find_candidate_inputs(reproduced_local_vars,reproduced_global_vars)
+            cand_args,cand_kwargs,cand_globals=self.find_candidate_inputs(reproduced_local_vars,reproduced_global_vars)
 
-            # TODO run target function to check if the state is same
+            # TODO Mutate target args and globals and collect before-after states
             exit(0)

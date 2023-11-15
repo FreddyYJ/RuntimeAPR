@@ -36,27 +36,27 @@ class Fuzzer:
     def mutate_object(self,obj:object,prev_name:str,continue_mutate=True):
         if continue_mutate:
             if isinstance(obj,Enum):
+                # For Enum object, select a random value
                 candidates=[]
                 for elem in obj.__class__:
                     candidates.append(elem)
                 index=random.randint(0,len(candidates)-1)
                 return candidates[index]
-            if isinstance(obj,bool):
+            
+            elif isinstance(obj,bool):
+                # For boolean object, negatiate the value
                 continue_mutate=False
                 return not obj
             
             elif isinstance(obj,int):
+                # For integer object, flip a random bit
+                MAX_INT_BIT=64
+                bit=random.randint(0,MAX_INT_BIT-1)
                 continue_mutate=False
-                binary=format(obj,'b')
-                for _ in range(64-len(binary)):
-                    binary='0'+binary
-                # Select a bit to flip randomly
-                index=random.randint(0,63)
-                # Flip the bit
-                new_binary=binary[:index]+('0' if binary[index]=='1' else '1')+binary[index+1:]
-                return int(new_binary,2)
+                return obj^(1<<bit)
             
             elif isinstance(obj,str):
+                # For str object, erase/insert/mutate a random character
                 continue_mutate=False
                 new_str=obj
                 MAX_STR_LEN=len(new_str)
@@ -80,6 +80,7 @@ class Fuzzer:
                     return new_str[:index]+chr(random.randint(0,255))+new_str[index+1:]
             
             elif isinstance(obj,bytes):
+                # For bytes object, erase/insert/mutate a random character
                 continue_mutate=False
                 new_str=obj
                 MAX_STR_LEN=len(new_str)
@@ -103,6 +104,7 @@ class Fuzzer:
                     return new_str[:index]+bytes(random.randint(0,255))+new_str[index+1:]
                 
             elif isinstance(obj,float):
+                # For float object, flip a random bitwise and bytewise
                 continue_mutate=False
                 binary=struct.pack('d',obj)
                 index=random.randint(0,63)
