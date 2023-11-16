@@ -1,7 +1,7 @@
 a=0
 
 def temp(a):
-    return a<3
+    return a!=3
 
 def inc(b):
     global a
