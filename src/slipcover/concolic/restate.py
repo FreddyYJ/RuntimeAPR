@@ -16,7 +16,7 @@ import gast as ast
 class StateReproducer:
     def __init__(self,fn:FunctionType,args_names,buggy_local_vars:Dict[str,object],buggy_global_vars:Dict[str,object],
                 #  args:List[object],kwargs:Dict[str,object],def_use_chain:List[DefUseGraph.Node]):
-                args:List[object],kwargs:Dict[str,object],def_use_chain:Dict[str,List[str]]):
+                args:List[object],kwargs:Dict[str,object],global_vars:Dict[str,object],def_use_chain:Dict[str,List[str]]):
         self.fn=fn
         self.args_names=args_names
         self.buggy_local_vars=prune_default_local_var(self.fn,buggy_local_vars)
@@ -25,6 +25,7 @@ class StateReproducer:
         self.orig_args=args
         self.kwargs=kwargs
         self.orig_kwargs=kwargs
+        self.global_vars=global_vars
         self.def_use_chains=def_use_chain
 
         """
@@ -288,10 +289,10 @@ class StateReproducer:
         return obj
 
     def reproduce(self):
-        new_args,new_kwargs,new_globals=deepcopy([self.args,self.kwargs,self.buggy_global_vars])
+        new_args,new_kwargs,new_globals=deepcopy([self.args,self.kwargs,self.global_vars])
 
         trial=1
-        while trial <= 10:
+        while trial <= 30:
             print(f'Trial {trial}')
 
             reproduced_local_vars,reproduced_global_vars=self.run(new_args,new_kwargs,new_globals)
@@ -354,4 +355,5 @@ class StateReproducer:
             
             trial+=1
 
+        print(f'Cannot reproduce states!')
         exit(0)

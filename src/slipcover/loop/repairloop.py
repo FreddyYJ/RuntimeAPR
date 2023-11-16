@@ -321,7 +321,7 @@ class RepairloopRunner:
 
         # Mutating buggy inputs to find exact states
         reproducer=StateReproducer(self.fn,self.target_func.args,self.bug_info.buggy_args_values,self.bug_info.buggy_global_values,
-                                   self.args,self.kwargs,self.defines)
+                                   buggy_args,buggy_kwargs,buggy_globals,self.defines)
         reproducer.reproduce()
         exit(0)
 
