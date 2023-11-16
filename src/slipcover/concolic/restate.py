@@ -25,7 +25,7 @@ class StateReproducer:
         self.orig_args=args
         self.kwargs=kwargs
         self.orig_kwargs=kwargs
-        self.global_vars=global_vars
+        self.global_vars=prune_default_global_var(self.fn,global_vars)
         self.def_use_chains=def_use_chain
 
         """

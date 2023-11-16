@@ -1,6 +1,6 @@
 from _ast import AsyncFunctionDef, FunctionDef
 from types import FunctionType
-from typing import Any, List, Set
+from typing import Any, List, Set, Union
 import gast as ast
 import beniget
 
@@ -32,11 +32,19 @@ class DependencyGraph:
         func_finder.visit(tree)
         self.func_def=func_finder.definition
 
-    def _get_full_attribute_name(self,node:ast.Attribute):
+    def _get_full_attribute_name(self,node:Union[ast.Attribute,ast.Subscript,ast.Name]):
+        if isinstance(node,ast.Name):
+            return node.id
         if isinstance(node.value,ast.Attribute):
-            return self._get_full_attribute_name(node.value)+'.'+node.attr
+            if isinstance(node,ast.Attribute):
+                return self._get_full_attribute_name(node.value)+'.'+node.attr
+            elif isinstance(node,ast.Subscript):
+                return self._get_full_attribute_name(node.value)+'['+self._get_full_attribute_name(node.slice)+']'
         elif isinstance(node.value,ast.Name):
-            return node.value.id+'.'+node.attr
+            if isinstance(node,ast.Attribute):
+                return node.value.id+'.'+node.attr
+            elif isinstance(node,ast.Subscript):
+                return node.value.id+'['+self._get_full_attribute_name(node.slice)+']'
         else:
             raise ValueError(f'Unknown attribute parent value type: {type(node.value)}')
 
@@ -57,6 +65,17 @@ class DependencyGraph:
                             defs.append(self._get_full_attribute_name(d))
 
                     full_graph[assign.targets[0].id]=defs[1:]
+
+                elif isinstance(assign.targets[0],ast.Subscript):
+                    defs=[]
+
+                    for d in ast.walk(assign.targets[0]):
+                        if isinstance(d,ast.Name):
+                            defs.append(d.id)
+                        elif isinstance(d,ast.Attribute):
+                            defs.append(self._get_full_attribute_name(d))
+
+                    full_graph[self._get_full_attribute_name(assign.targets[0])]=defs
 
                 elif isinstance(assign.targets[0],ast.Tuple):
                     for elts in assign.targets[0].elts:

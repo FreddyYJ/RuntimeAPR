@@ -86,7 +86,7 @@ PANDAS_LIST={
     3:['pandas/core/series.py','pandas/tests/series/methods/test_to_period.py::TestToPeriod::test_to_period_raises[unicode]','Series.to_period'],
     6:['pandas/core/indexes/period.py','pandas/tests/groupby/test_size.py::test_size_period_index','PeriodIndex.get_loc'],
     7:['pandas/core/indexes/base.py','pandas/tests/frame/indexing/test_indexing.py::TestDataFrameIndexing::test_reindex_nearest_tz','Index._get_nearest_indexer'],
-    10:['pandas/core/arrays/numpy_.py','pandas/tests/series/methods/test_update.py::TestUpdate::test_update_extension_array_series','PandasArray.__setitem__'],
+    10:['pandas/core/arrays/numpy_.py','pandas/tests/series/methods/test_update.py::TestUpdate::test_update_extension_array_series[result0-target0-expected0]','PandasArray.__setitem__'],
     11:['pandas/core/dtypes/cast.py','pandas/tests/reshape/test_concat.py::test_duplicate_keys','coerce_indexer_dtype'],
     12:['pandas/core/frame.py','pandas/tests/frame/methods/test_cov_corr.py::TestDataFrameCov::test_cov_nullable_integer[other_column0]','DataFrame.cov'],
     13:['pandas/core/dtypes/missing.py','pandas/tests/arrays/categorical/test_missing.py::TestCategoricalMissing::test_use_inf_as_na','_isna_string_dtype'],
