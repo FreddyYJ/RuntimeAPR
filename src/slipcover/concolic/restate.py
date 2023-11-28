@@ -281,9 +281,18 @@ class StateReproducer:
                 if len(names)==0:
                     return obj
                 index=random.randint(0,len(names)-1)
+                key_name=names[index]
                 
-                new_field=self.mutate_object(getattr(obj,'__dict__')[name],name+'.'+name,candidate_name)
-                setattr(obj,name,new_field)
+                if name+'.'+key_name in candidate_name:
+                    do_remove=random.randint(0,1)==1
+                else:
+                    do_remove=False
+
+                if do_remove:
+                    delattr(obj,name)
+                else:
+                    new_field=self.mutate_object(getattr(obj,'__dict__')[key_name],name+'.'+key_name,candidate_name)
+                    setattr(obj,name,new_field)
                 return obj
 
         return obj
@@ -291,69 +300,82 @@ class StateReproducer:
     def reproduce(self):
         new_args,new_kwargs,new_globals=deepcopy([self.args,self.kwargs,self.global_vars])
 
-        trial=1
-        while trial <= 30:
-            print(f'Trial {trial}')
+        with open('states.log','w') as f:
+            trial=1
+            while trial <= 30:
+                print(f'Trial {trial}')
 
-            reproduced_local_vars,reproduced_global_vars=self.run(new_args,new_kwargs,new_globals)
-            if reproduced_local_vars is None:
-                print(f'Exception not raised, skip!')
+                reproduced_local_vars,reproduced_global_vars=self.run(new_args,new_kwargs,new_globals)
+                if reproduced_local_vars is None:
+                    print(f'Exception not raised, skip!')
+                    # Mutate arguments
+                    arg_names=list(inspect.signature(self.fn).parameters.keys())
+                    for cand_arg in cand_args:
+                        arg_name=cand_arg.split('.')[0]
+                        if arg_name in arg_names:
+                            index=arg_names.index(arg_name)
+                            new_args[index]=self.mutate_object(prev_args[index],arg_name,cand_args)
+                    # Mutate kwargs
+                    for cand_kwarg in cand_kwargs:
+                        kwarg_name=cand_kwarg.split('.')[0]
+                        if kwarg_name in new_kwargs:
+                            new_kwargs[kwarg_name]=self.mutate_object(prev_kwargs[kwarg_name],kwarg_name,cand_kwargs)
+                    # Mutate globals
+                    for cand_global in cand_globals:
+                        global_name=cand_global.split('.')[0]
+                        if global_name in new_globals:
+                            new_globals[global_name]=self.mutate_object(prev_globals[global_name],global_name,cand_globals)
+
+                    continue
+
+                local_diffs,global_diffs=self.is_vars_same(prune_default_local_var(self.fn,reproduced_local_vars),
+                                                        prune_default_global_var(self.fn,reproduced_global_vars))
+                if len(local_diffs)==0 and len(global_diffs)==0:
+                    print(f'States reproduced in trial {trial}')
+                    return
+                
+                prev_args,prev_kwargs,prev_globals=deepcopy([new_args,new_kwargs,new_globals])
+                cur_local_values=dict()
+                for name,local in local_diffs.items():
+                    cur_local_values[name]=local[0]
+                cur_global_values=dict()
+                for name,local in global_diffs.items():
+                    cur_global_values[name]=local[0]
+                self.diffs.append((prev_args,prev_kwargs,prev_globals,cur_local_values,cur_global_values))
+                print(f'Trial: {trial}',file=f)
+                print(f'Args: {prev_args}',file=f)
+                print(f'Kwargs: {prev_kwargs}',file=f)
+                print(f'Globals: {prev_globals}',file=f)
+                print(f'Local diffs: {cur_local_values}',file=f)
+                print(f'Global diffs: {cur_global_values}',file=f)
+                
+                
+                cand_args,cand_kwargs,cand_globals=self.find_candidate_inputs(reproduced_local_vars,reproduced_global_vars)
+
                 # Mutate arguments
                 arg_names=list(inspect.signature(self.fn).parameters.keys())
                 for cand_arg in cand_args:
                     arg_name=cand_arg.split('.')[0]
                     if arg_name in arg_names:
                         index=arg_names.index(arg_name)
-                        new_args[index]=self.mutate_object(prev_args[index],arg_name,cand_args)
+                        new_args[index]=self.mutate_object(new_args[index],arg_name,cand_args)
                 # Mutate kwargs
                 for cand_kwarg in cand_kwargs:
                     kwarg_name=cand_kwarg.split('.')[0]
                     if kwarg_name in new_kwargs:
-                        new_kwargs[kwarg_name]=self.mutate_object(prev_kwargs[kwarg_name],kwarg_name,cand_kwargs)
+                        new_kwargs[kwarg_name]=self.mutate_object(new_kwargs[kwarg_name],kwarg_name,cand_kwargs)
                 # Mutate globals
                 for cand_global in cand_globals:
                     global_name=cand_global.split('.')[0]
                     if global_name in new_globals:
-                        new_globals[global_name]=self.mutate_object(prev_globals[global_name],global_name,cand_globals)
-
-                continue
-
-            local_diffs,global_diffs=self.is_vars_same(prune_default_local_var(self.fn,reproduced_local_vars),
-                                                       prune_default_global_var(self.fn,reproduced_global_vars))
-            if len(local_diffs)==0 and len(global_diffs)==0:
-                print(f'States reproduced in trial {trial}')
-                return
-            
-            prev_args,prev_kwargs,prev_globals=deepcopy([new_args,new_kwargs,new_globals])
-            cur_local_values=dict()
-            for name,local in local_diffs.items():
-                cur_local_values[name]=local[0]
-            cur_global_values=dict()
-            for name,local in global_diffs.items():
-                cur_global_values[name]=local[0]
-            self.diffs.append((prev_args,prev_kwargs,prev_globals,cur_local_values,cur_global_values))
-            
-            cand_args,cand_kwargs,cand_globals=self.find_candidate_inputs(reproduced_local_vars,reproduced_global_vars)
-
-            # Mutate arguments
-            arg_names=list(inspect.signature(self.fn).parameters.keys())
-            for cand_arg in cand_args:
-                arg_name=cand_arg.split('.')[0]
-                if arg_name in arg_names:
-                    index=arg_names.index(arg_name)
-                    new_args[index]=self.mutate_object(new_args[index],arg_name,cand_args)
-            # Mutate kwargs
-            for cand_kwarg in cand_kwargs:
-                kwarg_name=cand_kwarg.split('.')[0]
-                if kwarg_name in new_kwargs:
-                    new_kwargs[kwarg_name]=self.mutate_object(new_kwargs[kwarg_name],kwarg_name,cand_kwargs)
-            # Mutate globals
-            for cand_global in cand_globals:
-                global_name=cand_global.split('.')[0]
-                if global_name in new_globals:
-                    new_globals[global_name]=self.mutate_object(new_globals[global_name],global_name,cand_globals)
-            
-            trial+=1
+                        new_globals[global_name]=self.mutate_object(new_globals[global_name],global_name,cand_globals)
+                
+                print(f'Candidate args: {cand_args}',file=f)
+                print(f'Candidate kwargs: {cand_kwargs}',file=f)
+                print(f'Candidate globals: {cand_globals}',file=f)
+                print('-----------------------------',file=f)
+                
+                trial+=1
 
         print(f'Cannot reproduce states!')
         exit(0)
