@@ -284,12 +284,14 @@ class StateReproducer:
                 key_name=names[index]
                 
                 if name+'.'+key_name in candidate_name:
-                    do_remove=random.randint(0,1)==1
+                    do_remove=random.randint(0,2)
                 else:
-                    do_remove=False
+                    do_remove=0
 
-                if do_remove:
+                if do_remove==1:
                     delattr(obj,name)
+                elif do_remove==2:
+                    setattr(obj,name,None)
                 else:
                     new_field=self.mutate_object(getattr(obj,'__dict__')[key_name],name+'.'+key_name,candidate_name)
                     setattr(obj,name,new_field)
