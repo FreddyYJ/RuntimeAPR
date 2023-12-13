@@ -13,3 +13,5 @@ benchmarks/*
 !benchmarks/diffs
 !benchmarks/requirements.txt
 examples/*.txt
+
+**/states.log
