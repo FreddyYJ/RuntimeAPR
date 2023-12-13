@@ -100,7 +100,8 @@ setuptools.setup(
         "graphviz",
         "typing-extensions",
         "beniget",
-        "gast"
+        "gast",
+        "importlib-resources"
     ],
     classifiers=[
         "Programming Language :: Python :: 3.8",
