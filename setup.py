@@ -101,7 +101,10 @@ setuptools.setup(
         "typing-extensions",
         "beniget",
         "gast",
-        "importlib-resources"
+        "importlib-resources",
+        "torch",
+        "torchvision",
+        "torchaudio"
     ],
     classifiers=[
         "Programming Language :: Python :: 3.8",
