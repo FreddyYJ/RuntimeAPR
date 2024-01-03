@@ -2,6 +2,9 @@ from enum import Enum
 from functools import partial
 import random
 import struct
+import numpy as np
+
+from sympy import Q
 
 from .defusegraph import DefUseGraph
 from ..loop.repairutils import PickledObject, SetObject,compare_object, is_default_global, \
@@ -11,7 +14,8 @@ from typing import Dict,List, Set,Tuple
 from types import FunctionType, ModuleType
 import inspect
 from copy import deepcopy
-import gast as ast
+import torch
+import torch.nn as nn
 
 class StateReproducer:
     def __init__(self,fn:FunctionType,args_names,buggy_local_vars:Dict[str,object],buggy_global_vars:Dict[str,object],
@@ -22,6 +26,7 @@ class StateReproducer:
         self.buggy_local_vars=prune_default_local_var(self.fn,buggy_local_vars)
         self.buggy_global_vars=prune_default_global_var(self.fn,buggy_global_vars)
         self.args=args
+        self.arg_names=list(inspect.signature(self.fn).parameters.keys())
         self.orig_args=args
         self.kwargs=kwargs
         self.orig_kwargs=kwargs
@@ -35,6 +40,13 @@ class StateReproducer:
             ]
         """
         self.diffs:List[tuple]=[]
+
+        if torch.cuda.is_available():
+            self.device=torch.device('cuda')
+            print('Using GPU')
+        else:
+            self.device=torch.device('cpu')
+            print('Using CPU')
 
     def run(self,new_args:List[object],new_kwargs:Dict[str,object],new_globals:Dict[str,object]):
         # Prune default variables
@@ -183,10 +195,11 @@ class StateReproducer:
 
         return cand_args,cand_kwargs,cand_globals
     
-    def mutate_object(self,obj:object,name:str,candidate_name:List[str]):
+    def mutate_object(self,obj:object,name:str,candidate_name:List[str],mutated_values=dict()):
         if name in candidate_name:
             if isinstance(obj,FunctionType) or isinstance(obj,ModuleType) or inspect.isclass(obj) or \
                                                 isinstance(obj,partial):
+                mutated_values[name]=obj
                 return obj
             
             print(f'Mutate {name}')
@@ -196,17 +209,20 @@ class StateReproducer:
                 for elem in obj.__class__:
                     candidates.append(elem)
                 index=random.randint(0,len(candidates)-1)
-                return candidates[index]
+                mutated_values[name]=candidates[index]
+                return mutated_values[name]
             
             elif isinstance(obj,bool):
                 # For boolean object, negatiate the value
-                return not obj
+                mutated_values[name]=not obj
+                return mutated_values[name]
             
             elif isinstance(obj,int):
                 # For integer object, flip a random bit
-                MAX_INT_BIT=64
+                MAX_INT_BIT=16
                 bit=random.randint(0,MAX_INT_BIT-1)
-                return obj^(1<<bit)
+                mutated_values[name]=obj^(1<<bit)
+                return mutated_values[name]
             
             elif isinstance(obj,str):
                 # For str object, erase/insert/mutate a random character
@@ -223,13 +239,18 @@ class StateReproducer:
                     index=random.randint(0,len(new_str))
                     new_str=new_str[:index]+chr(random.randint(0,255))+new_str[index:]
 
-                if new_str!=obj: return new_str
+                if new_str!=obj:
+                    mutated_values[name]=new_str
+                    return new_str
 
-                if len(new_str)==0: return chr(random.randint(0,255))
+                if len(new_str)==0:
+                    mutated_values[name]=chr(random.randint(0,255))
+                    return mutated_values[name]
                 else:
                     # Still the same string, mutate a random character
                     index=random.randint(0,len(new_str)-1)
-                    return new_str[:index]+chr(random.randint(0,255))+new_str[index+1:]
+                    mutated_values[name]=new_str[:index]+chr(random.randint(0,255))+new_str[index+1:]
+                    return mutated_values[name]
             
             elif isinstance(obj,bytes):
                 # For bytes object, erase/insert/mutate a random character
@@ -246,23 +267,29 @@ class StateReproducer:
                     index=random.randint(0,len(new_str))
                     new_str=new_str[:index]+bytes(random.randint(0,255))+new_str[index:]
 
-                if new_str!=obj: return new_str
+                if new_str!=obj:
+                    mutated_values[name]=new_str
+                    return new_str
 
-                if len(new_str)==0: return bytes(random.randint(0,255))
+                if len(new_str)==0:
+                    mutated_values[name]=bytes(random.randint(0,255))
+                    return mutated_values[name]
                 else:
                     # Still the same string, mutate a random character
                     index=random.randint(0,len(new_str)-1)
-                    return new_str[:index]+bytes(random.randint(0,255))+new_str[index+1:]
+                    mutated_values[name]=new_str[:index]+bytes(random.randint(0,255))+new_str[index+1:]
+                    return mutated_values[name]
                 
             elif isinstance(obj,float):
                 # For float object, flip a random bitwise and bytewise
                 binary=struct.pack('d',obj)
-                index=random.randint(0,63)
+                index=random.randint(0,15)
                 bytewise=index//8
                 bitwise=index%8
 
                 new_binary=binary[:bytewise]+bytes([binary[bytewise]^(1<<bitwise)])+binary[bytewise+1:]
-                return struct.unpack('d',new_binary)[0]
+                mutated_values[name]=struct.unpack('d',new_binary)[0]
+                return mutated_values[name]
     
         else:
             continue_mutate=False
@@ -298,35 +325,165 @@ class StateReproducer:
                 return obj
 
         return obj
+    
+    def torch_predict(self,target_x:Dict[str,object]):
+        x,y=[],[]
+        input_keys=[]
+        output_keys=[]
+
+        # Store args and vars keys first for the order and padding
+        for diff in self.diffs[1:]:
+            args,kwargs,globals,mutated_objects,local_vars,global_vars=diff
+            for name,obj in mutated_objects.items():
+                if name not in input_keys:
+                    input_keys.append(name)
+            for name,obj in local_vars.items():
+                if name not in output_keys:
+                    output_keys.append(name)
+            for name,obj in global_vars.items():
+                if name not in output_keys:
+                    output_keys.append(name)
+
+        def get_original_value(obj:object,cur_name:str,target_name:str):
+            if cur_name==target_name:
+                return obj
+            elif target_name.startswith(cur_name):
+                if hasattr(obj,'__dict__'):
+                    for name,field in getattr(obj,'__dict__').items():
+                        if target_name.startswith(cur_name+'.'+name):
+                            return get_original_value(field,cur_name+'.'+name,target_name)
+            return None
+        
+        # Create x and y
+        # Now we assume different state is only one
+        # We ignore first element because it uses original inputs
+        y_types=[]
+        for diff in self.diffs[1:]:
+            args,kwargs,globals,mutated_objects,local_vars,global_vars=diff
+            # y is args, kwargs, globals that we want to predict
+            for name in input_keys:
+                if name in mutated_objects:
+                    y.append([mutated_objects[name]])
+                else:
+                    root_name=name.split('.')[0]
+                    if root_name in kwargs.keys():
+                        y_orig_value=get_original_value(kwargs[root_name],root_name,name)
+                    elif root_name in globals.keys():
+                        y_orig_value=get_original_value(globals[root_name],root_name,name)
+                    else:
+                        # args
+                        y_orig_value=get_original_value(args[self.arg_names.index(root_name)],root_name,name)
+                    y.append([y_orig_value])
+                    y_types.append(type(y_orig_value))
+            
+            # x is current states
+            for name in output_keys:
+                if name in local_vars:
+                    x.append([local_vars[name]])
+                else:
+                    x.append([global_vars[name]])
+        
+        # Create model
+        y_tensor=torch.tensor(y,dtype=torch.float64,device=self.device)
+        x_tensor=torch.tensor(x,dtype=torch.float64,device=self.device)
+
+        # This is the model. We now assumed the input and output is number.
+        # TODO: Find the model for string
+        class Model(nn.Module):
+            def __init__(self) -> None:
+                super().__init__()
+                self.model=nn.Sequential(
+                    nn.Linear(len(x[0]),128,dtype=torch.float64),
+                    nn.ReLU(),
+                    nn.Linear(128,64,dtype=torch.float64),
+                    nn.ReLU(),
+                    nn.Linear(64,len(y[0]),dtype=torch.float64)
+                )
+            
+            def forward(self,x):
+                return self.model(x)
+            
+        model=Model().to(self.device)
+        learning_rate = 1e-4
+        epochs = 1000
+        loss=nn.MSELoss()
+        optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
+
+        print("Training the model...")
+        model.train()
+        for t in range(epochs):
+            for batch, (x_v,y_v) in enumerate(zip(x_tensor,y_tensor)):
+                output=model(x_v)
+                l=loss(output,y_v)
+                optimizer.zero_grad()
+                l.backward()
+                optimizer.step()
+
+            if t%50==49:
+                print(f"Epoch {t+1} Batch {batch+1} Loss {l.item()}")
+
+        # Predict target args, kwargs, globals
+        print('Predicting target args, kwargs, globals...')
+        model.eval()
+        with torch.no_grad():
+            temp_x=dict()
+            for name,obj in target_x.items():
+                if name in output_keys:
+                    temp_x[output_keys.index(name)]=obj
+            x_keys=sorted(list(temp_x.keys()))
+            t_x=[]
+            for i in x_keys:
+                t_x.append(temp_x[i])
+
+            target_x_tensor=torch.tensor(t_x,dtype=torch.float64,device=self.device)
+            target_y_tensor:torch.Tensor=model(target_x_tensor)
+            target_y:list=target_y_tensor.cpu().numpy().tolist()
+        
+        for i,y_value in enumerate(target_y.copy()):
+            if isinstance(y[0][i],int):
+                target_y[i]=int(y_value)
+        
+        print(f'Predicted: {target_y} from {t_x}')
+        return target_y
 
     def reproduce(self):
+        MAX_TRIAL=300
         new_args,new_kwargs,new_globals=deepcopy([self.args,self.kwargs,self.global_vars])
+        new_args_only, new_kwargs_only,new_globals_only=dict(),dict(),dict()
+        mutated_objects=dict()
 
         with open('states.log','w') as f:
             trial=1
-            while trial <= 30:
+            while trial <= MAX_TRIAL:
                 print(f'Trial {trial}')
 
-                reproduced_local_vars,reproduced_global_vars=self.run(new_args,new_kwargs,new_globals)
+                prev_args,prev_kwargs,prev_globals=deepcopy([new_args,new_kwargs,new_globals])
+                new_args,new_kwargs,new_globals=deepcopy([new_args,new_kwargs,new_globals])
+                reproduced_local_vars,reproduced_global_vars=self.run(prev_args,prev_kwargs,prev_globals)
                 if reproduced_local_vars is None:
                     print(f'Exception not raised, skip!')
+                    new_args_only, new_kwargs_only,new_globals_only=dict(),dict(),dict()
+                    mutated_objects=dict()
                     # Mutate arguments
                     arg_names=list(inspect.signature(self.fn).parameters.keys())
                     for cand_arg in cand_args:
                         arg_name=cand_arg.split('.')[0]
                         if arg_name in arg_names:
                             index=arg_names.index(arg_name)
-                            new_args[index]=self.mutate_object(prev_args[index],arg_name,cand_args)
+                            new_args[index]=self.mutate_object(prev_args[index],arg_name,cand_args,mutated_objects)
+                            new_args_only[index]=new_args[index]
                     # Mutate kwargs
                     for cand_kwarg in cand_kwargs:
                         kwarg_name=cand_kwarg.split('.')[0]
                         if kwarg_name in new_kwargs:
-                            new_kwargs[kwarg_name]=self.mutate_object(prev_kwargs[kwarg_name],kwarg_name,cand_kwargs)
+                            new_kwargs[kwarg_name]=self.mutate_object(prev_kwargs[kwarg_name],kwarg_name,cand_kwargs,mutated_objects)
+                            new_kwargs_only[kwarg_name]=new_kwargs[kwarg_name]
                     # Mutate globals
                     for cand_global in cand_globals:
                         global_name=cand_global.split('.')[0]
                         if global_name in new_globals:
-                            new_globals[global_name]=self.mutate_object(prev_globals[global_name],global_name,cand_globals)
+                            new_globals[global_name]=self.mutate_object(prev_globals[global_name],global_name,cand_globals,mutated_objects)
+                            new_globals_only[global_name]=new_globals[global_name]
 
                     continue
 
@@ -336,41 +493,44 @@ class StateReproducer:
                     print(f'States reproduced in trial {trial}')
                     return
                 
-                prev_args,prev_kwargs,prev_globals=deepcopy([new_args,new_kwargs,new_globals])
                 cur_local_values=dict()
                 for name,local in local_diffs.items():
                     cur_local_values[name]=local[0]
                 cur_global_values=dict()
                 for name,local in global_diffs.items():
                     cur_global_values[name]=local[0]
-                self.diffs.append((prev_args,prev_kwargs,prev_globals,cur_local_values,cur_global_values))
+                self.diffs.append((new_args,new_kwargs,new_globals,mutated_objects,cur_local_values,cur_global_values))
                 print(f'Trial: {trial}',file=f)
-                print(f'Args: {prev_args}',file=f)
-                print(f'Kwargs: {prev_kwargs}',file=f)
-                print(f'Globals: {prev_globals}',file=f)
+                print(f'Args: {new_args}',file=f)
+                print(f'Kwargs: {new_kwargs}',file=f)
+                print(f'Globals: {new_globals}',file=f)
                 print(f'Local diffs: {cur_local_values}',file=f)
                 print(f'Global diffs: {cur_global_values}',file=f)
                 
-                
                 cand_args,cand_kwargs,cand_globals=self.find_candidate_inputs(reproduced_local_vars,reproduced_global_vars)
 
+                new_args_only, new_kwargs_only,new_globals_only=dict(),dict(),dict()
+                mutated_objects=dict()
                 # Mutate arguments
                 arg_names=list(inspect.signature(self.fn).parameters.keys())
                 for cand_arg in cand_args:
                     arg_name=cand_arg.split('.')[0]
                     if arg_name in arg_names:
                         index=arg_names.index(arg_name)
-                        new_args[index]=self.mutate_object(new_args[index],arg_name,cand_args)
+                        new_args[index]=self.mutate_object(new_args[index],arg_name,cand_args,mutated_objects)
+                        new_args_only[cand_arg]=new_args[index]
                 # Mutate kwargs
                 for cand_kwarg in cand_kwargs:
                     kwarg_name=cand_kwarg.split('.')[0]
                     if kwarg_name in new_kwargs:
-                        new_kwargs[kwarg_name]=self.mutate_object(new_kwargs[kwarg_name],kwarg_name,cand_kwargs)
+                        new_kwargs[kwarg_name]=self.mutate_object(new_kwargs[kwarg_name],kwarg_name,cand_kwargs,mutated_objects)
+                        new_kwargs_only[cand_kwarg]=new_kwargs[kwarg_name]
                 # Mutate globals
                 for cand_global in cand_globals:
                     global_name=cand_global.split('.')[0]
                     if global_name in new_globals:
-                        new_globals[global_name]=self.mutate_object(new_globals[global_name],global_name,cand_globals)
+                        new_globals[global_name]=self.mutate_object(new_globals[global_name],global_name,cand_globals,mutated_objects)
+                        new_globals_only[cand_global]=new_globals[global_name]
                 
                 print(f'Candidate args: {cand_args}',file=f)
                 print(f'Candidate kwargs: {cand_kwargs}',file=f)
@@ -379,5 +539,10 @@ class StateReproducer:
                 
                 trial+=1
 
-        print(f'Cannot reproduce states!')
+        print(f'States collected!')
+        buggy_vars=deepcopy(self.buggy_local_vars)
+        buggy_vars.update(self.buggy_global_vars)
+        self.torch_predict(buggy_vars)
+
         exit(0)
+
