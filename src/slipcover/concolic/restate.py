@@ -13,7 +13,7 @@ from ..loop.repairutils import PickledObject, SetObject,compare_object, is_defau
 from typing import Dict,List, Set,Tuple
 from types import FunctionType, ModuleType
 import inspect
-from copy import deepcopy
+from copy import deepcopy,copy
 import torch
 import torch.nn as nn
 
@@ -162,11 +162,11 @@ class StateReproducer:
                     print(f'Mutate local var {name}: {base_obj} -> {obj}')
                     # Find the corresponding argument, kwargs, globals
                     for use in self.def_use_chains[name]:
-                        if use.split('.')[0] in pos_args:
+                        if use.split('.')[0] in pos_args and not is_default_local(self.fn,use.split('.')[0],self.args[self.arg_names.index(use.split('.')[0])]):
                             cand_args.add(use)
-                        elif use.split('.')[0] in kwonly_args:
+                        elif use.split('.')[0] in kwonly_args and not is_default_local(self.fn,use.split('.')[0],self.kwargs[use.split('.')[0]]):
                             cand_kwargs.add(use)
-                        else:
+                        elif use.split('.')[0] in self.global_vars:
                             cand_globals.add(use)
 
         if len(global_diffs)!=0:
@@ -179,11 +179,11 @@ class StateReproducer:
                     print(f'Mutate global var {name}: {base_obj} -> {obj}')
                     # Find the corresponding argument, kwargs, globals
                     for use in self.def_use_chains[name]:
-                        if use.split('.')[0] in pos_args:
+                        if use.split('.')[0] in pos_args and not is_default_local(self.fn,use.split('.')[0],self.args[self.arg_names.index(use.split('.')[0])]):
                             cand_args.add(use)
-                        elif use.split('.')[0] in kwonly_args:
+                        elif use.split('.')[0] in kwonly_args and not is_default_local(self.fn,use.split('.')[0],self.kwargs[use.split('.')[0]]):
                             cand_kwargs.add(use)
-                        else:
+                        elif use.split('.')[0] in self.global_vars:
                             cand_globals.add(use)
 
         if len(cand_args)!=0:
@@ -226,7 +226,7 @@ class StateReproducer:
             
             elif isinstance(obj,str):
                 # For str object, erase/insert/mutate a random character
-                new_str=obj
+                new_str=copy(obj)
                 MAX_STR_LEN=len(new_str)
 
                 # Erase random characters
@@ -360,10 +360,18 @@ class StateReproducer:
         y_types=[]
         for diff in self.diffs[1:]:
             args,kwargs,globals,mutated_objects,local_vars,global_vars=diff
+            y_values=[]
             # y is args, kwargs, globals that we want to predict
             for name in input_keys:
                 if name in mutated_objects:
-                    y.append([mutated_objects[name]])
+                    y_orig_value=mutated_objects[name]
+                    if isinstance(y_orig_value,str):
+                        # Convert string to unicode number
+                        unicode_values=[]
+                        unicode_values.extend(ord(c) for c in y_orig_value)
+                        y_orig_value=unicode_values
+                    y_values.append(y_orig_value)
+                    y_types.append(type(y_orig_value))
                 else:
                     root_name=name.split('.')[0]
                     if root_name in kwargs.keys():
@@ -373,15 +381,25 @@ class StateReproducer:
                     else:
                         # args
                         y_orig_value=get_original_value(args[self.arg_names.index(root_name)],root_name,name)
-                    y.append([y_orig_value])
+                    
+                    if isinstance(y_orig_value,str):
+                        # Convert string to unicode number
+                        unicode_values=[]
+                        unicode_values.extend(ord(c) for c in y_orig_value)
+                        y_orig_value=unicode_values
+                    y_values.append(y_orig_value)
                     y_types.append(type(y_orig_value))
+
+            y.append(y_values)
             
             # x is current states
+            x_values=[]
             for name in output_keys:
                 if name in local_vars:
-                    x.append([local_vars[name]])
-                else:
-                    x.append([global_vars[name]])
+                    x_values.append([local_vars[name]])
+                elif name in global_vars:
+                    x_values.append([global_vars[name]])
+            x.append(x_values)
         
         # Create model
         y_tensor=torch.tensor(y,dtype=torch.float64,device=self.device)
@@ -462,6 +480,7 @@ class StateReproducer:
                 reproduced_local_vars,reproduced_global_vars=self.run(prev_args,prev_kwargs,prev_globals)
                 if reproduced_local_vars is None:
                     print(f'Exception not raised, skip!')
+                    copied_args,copied_kwargs,copied_globals=deepcopy([self.args,self.kwargs,self.global_vars])
                     new_args_only, new_kwargs_only,new_globals_only=dict(),dict(),dict()
                     mutated_objects=dict()
                     # Mutate arguments
@@ -470,19 +489,19 @@ class StateReproducer:
                         arg_name=cand_arg.split('.')[0]
                         if arg_name in arg_names:
                             index=arg_names.index(arg_name)
-                            new_args[index]=self.mutate_object(prev_args[index],arg_name,cand_args,mutated_objects)
+                            new_args[index]=self.mutate_object(copied_args[index],arg_name,cand_args,mutated_objects)
                             new_args_only[index]=new_args[index]
                     # Mutate kwargs
                     for cand_kwarg in cand_kwargs:
                         kwarg_name=cand_kwarg.split('.')[0]
                         if kwarg_name in new_kwargs:
-                            new_kwargs[kwarg_name]=self.mutate_object(prev_kwargs[kwarg_name],kwarg_name,cand_kwargs,mutated_objects)
+                            new_kwargs[kwarg_name]=self.mutate_object(copied_kwargs[kwarg_name],kwarg_name,cand_kwargs,mutated_objects)
                             new_kwargs_only[kwarg_name]=new_kwargs[kwarg_name]
                     # Mutate globals
                     for cand_global in cand_globals:
                         global_name=cand_global.split('.')[0]
                         if global_name in new_globals:
-                            new_globals[global_name]=self.mutate_object(prev_globals[global_name],global_name,cand_globals,mutated_objects)
+                            new_globals[global_name]=self.mutate_object(copied_globals[global_name],global_name,cand_globals,mutated_objects)
                             new_globals_only[global_name]=new_globals[global_name]
 
                     continue
@@ -499,7 +518,7 @@ class StateReproducer:
                 cur_global_values=dict()
                 for name,local in global_diffs.items():
                     cur_global_values[name]=local[0]
-                self.diffs.append((new_args,new_kwargs,new_globals,mutated_objects,cur_local_values,cur_global_values))
+                self.diffs.append((new_args,prune_default_local_var(self.fn,new_kwargs),prune_default_global_var(self.fn,new_globals),mutated_objects,cur_local_values,cur_global_values))
                 print(f'Trial: {trial}',file=f)
                 print(f'Args: {new_args}',file=f)
                 print(f'Kwargs: {new_kwargs}',file=f)
@@ -507,7 +526,7 @@ class StateReproducer:
                 print(f'Local diffs: {cur_local_values}',file=f)
                 print(f'Global diffs: {cur_global_values}',file=f)
                 
-                cand_args,cand_kwargs,cand_globals=self.find_candidate_inputs(reproduced_local_vars,reproduced_global_vars)
+                cand_args,cand_kwargs,cand_globals=self.find_candidate_inputs(local_diffs,global_diffs)
 
                 new_args_only, new_kwargs_only,new_globals_only=dict(),dict(),dict()
                 mutated_objects=dict()
