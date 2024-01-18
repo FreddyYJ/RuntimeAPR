@@ -13,6 +13,7 @@ import z3
 from bytecode import Bytecode
 import gc
 from openai import OpenAI
+from bytecode import Bytecode,dump_bytecode
 
 from ..concolic.fuzzing import Fuzzer
 from .funcast import FunctionFinderVisitor
@@ -280,33 +281,52 @@ class RepairloopRunner:
         return (dict(),dict())
     
     def repair(self,func_entry:Dict[str,object]):
-        # Generate patches with OpenAI
-        print(self.bug_info.buggy_line-self.target_func.lineno+1)
-        print(self.func_code)
-        completion=self.openai_client.chat.completions.create(
-            model='gpt-4',
-            messages=[
-                {'role':'system','content':'You are a good software engineer. Fix the provided Python code to avoid exception.'},
-                {'role':'user','content':''}
-            ]
-        )
+        while True:
+            # Generate patches with OpenAI
+            print(self.bug_info.buggy_line-self.target_func.lineno+1)
+            print(self.func_code)
 
-        resp=completion.choices[0].message
-        return
-    
-        # Try with predicted y
-        new_args,new_kwargs,new_globals=deepcopy([self.args,self.kwargs,self.global_vars])
-        for name,obj in func_entry.items():
-            if name in self.arg_names:
-                index=self.arg_names.index(name)
-                new_args[index]=obj
-            elif name in new_kwargs:
-                new_kwargs[name]=obj
-            elif name in new_globals:
-                new_globals[name]=obj
-        reproduced_local_vars,reproduced_global_vars=self.run(new_args,new_kwargs,new_globals)
-        if reproduced_local_vars is None:
-            pass
+            # TODO: Add request and response
+            # completion=self.openai_client.chat.completions.create(
+            #     model='gpt-4',
+            #     messages=[
+            #         {'role':'system','content':'You are a good software engineer. Fix the provided Python code to avoid exception.'},
+            #         {'role':'user','content':''}
+            #     ]
+            # )
+            # resp=completion.choices[0].message
+
+            resp='''def inc(b):
+        global a
+        a=a+1
+        if a>=3:
+            print(f'a: {a}')
+        else:
+            print(f'a: {a}')
+    '''
+
+            patched_code=compile(resp,self.fn.__code__.co_filename,'exec')
+            patched_bytecode=Bytecode.from_code(patched_code)
+            patched_func=patched_bytecode[0].arg  # root code contains the code of patched function
+        
+            # Replace args, kwargs, and globals with predicted function entry
+            new_args,new_kwargs,new_globals=deepcopy([self.args,self.kwargs,self.global_vars])
+            for name,obj in func_entry.items():
+                if name in self.arg_names:
+                    index=self.arg_names.index(name)
+                    new_args[index]=obj
+                elif name in new_kwargs:
+                    new_kwargs[name]=obj
+                elif name in new_globals:
+                    new_globals[name]=obj
+        
+            try:
+                for name in new_globals:
+                    self.fn.__globals__[name]=new_globals[name]
+                self.fn.__code__=patched_func  # Replace original function code with patched code
+                return self.fn(*new_args, **new_kwargs)
+            except Exception as e:
+                print('Exception not fixed or new exception raised, retry...')
     
     def loop(self,from_error:Exception=None):
         """
@@ -360,8 +380,7 @@ class RepairloopRunner:
         func_entry=reproducer.reproduce()
 
         # Repair
-        self.repair(func_entry)
-        exit(0)
+        return self.repair(func_entry)
 
         while not is_same:
             if self.trial>MAX_TRIAL:
