@@ -12,6 +12,7 @@ import traceback
 import z3
 from bytecode import Bytecode
 import gc
+from openai import OpenAI
 
 from ..concolic.fuzzing import Fuzzer
 from .funcast import FunctionFinderVisitor
@@ -24,7 +25,7 @@ from ..concolic.defusegraph import DependencyGraph
 is_concolic_execution=False
 
 class RepairloopRunner:
-    def __init__(self, fn:FunctionType, args, kwargs, bug_info:BugInformation,target_func:ast.FunctionDef):
+    def __init__(self, fn:FunctionType, args, kwargs, bug_info:BugInformation,target_func:ast.FunctionDef,func_code:str):
         """
         :param fn: function to run
         :param args: arguments to pass to the function
@@ -34,9 +35,11 @@ class RepairloopRunner:
         """
         self.fn=fn
         self.target_func=target_func
+        self.func_code=func_code
 
         # For arguments and global variables
         self.args:list=args
+        self.arg_names=list(inspect.signature(self.fn).parameters.keys())
         self.kwargs:Dict[str,object]=kwargs
         self.global_vars=prune_default_global_var(fn,fn.__globals__)
         self.bug_info=bug_info
@@ -62,6 +65,9 @@ class RepairloopRunner:
         # Save object states in the file, for the debug
         self.save_states_file:str=os.environ.get('APR_SAVE_FILE','/dev/null')
         self.is_append=False
+
+        # OpenAI stuffs
+        self.openai_client=OpenAI()
 
     def run_concolic(self,before_values:Dict[str,Any]) -> Tuple[List[z3.BoolRef],Dict[str,object],Dict[str,object]]:
         """
@@ -273,6 +279,35 @@ class RepairloopRunner:
 
         return (dict(),dict())
     
+    def repair(self,func_entry:Dict[str,object]):
+        # Generate patches with OpenAI
+        print(self.bug_info.buggy_line-self.target_func.lineno+1)
+        print(self.func_code)
+        completion=self.openai_client.chat.completions.create(
+            model='gpt-4',
+            messages=[
+                {'role':'system','content':'You are a good software engineer. Fix the provided Python code to avoid exception.'},
+                {'role':'user','content':''}
+            ]
+        )
+
+        resp=completion.choices[0].message
+        return
+    
+        # Try with predicted y
+        new_args,new_kwargs,new_globals=deepcopy([self.args,self.kwargs,self.global_vars])
+        for name,obj in func_entry.items():
+            if name in self.arg_names:
+                index=self.arg_names.index(name)
+                new_args[index]=obj
+            elif name in new_kwargs:
+                new_kwargs[name]=obj
+            elif name in new_globals:
+                new_globals[name]=obj
+        reproduced_local_vars,reproduced_global_vars=self.run(new_args,new_kwargs,new_globals)
+        if reproduced_local_vars is None:
+            pass
+    
     def loop(self,from_error:Exception=None):
         """
         Run the function and compare variables with buggy
@@ -322,7 +357,10 @@ class RepairloopRunner:
         # Mutating buggy inputs to find exact states
         reproducer=StateReproducer(self.fn,self.target_func.args,self.bug_info.buggy_args_values,self.bug_info.buggy_global_values,
                                    buggy_args,buggy_kwargs,buggy_globals,self.defines)
-        reproducer.reproduce()
+        func_entry=reproducer.reproduce()
+
+        # Repair
+        self.repair(func_entry)
         exit(0)
 
         while not is_same:
@@ -454,7 +492,10 @@ def except_handler(e:Exception):
     assert func is not None,f'Cannot find function {inner_info.function} at line {inner_info.lineno}'
 
     with open(inner_info.filename,'r') as file:
-        func_ast=ast.parse(file.read(),inner_info.filename,'exec')
+        code=file.read()
+        func_ast=ast.parse(code,inner_info.filename,'exec')
+        lines=code.splitlines()
+
     visitor=FunctionFinderVisitor(inner_info.lineno)
     visitor.visit(func_ast)
     target_func=visitor.get_funcs()
@@ -463,6 +504,9 @@ def except_handler(e:Exception):
     # print(args.posonlyargs)
     # print(args.kwonlyargs[0].arg)
     # print(args.vararg.arg)
+
+    target_lines=lines[target_func.lineno-1:target_func.end_lineno]
+    target_code='\n'.join(target_lines)
 
     pos_args=[]
     for arg in args.posonlyargs:
@@ -517,7 +561,7 @@ def except_handler(e:Exception):
         _obj=pickle_object(func,name,obj,is_global=True)
         if _obj is not None:
             bug_info.global_vars[name]=_obj
-    runner=RepairloopRunner(func,pos_only+norms+vargs,kwonlys,bug_info,target_func)
+    runner=RepairloopRunner(func,pos_only+norms+vargs,kwonlys,bug_info,target_func,target_code)
     return runner.loop(e)
 
 __entry_i=0

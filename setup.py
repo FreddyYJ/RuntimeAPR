@@ -104,7 +104,8 @@ setuptools.setup(
         "importlib-resources",
         "torch",
         "torchvision",
-        "torchaudio"
+        "torchaudio",
+        "openai"
     ],
     classifiers=[
         "Programming Language :: Python :: 3.8",

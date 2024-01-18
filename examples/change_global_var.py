@@ -1,12 +1,9 @@
 a=0
 
-def temp(a):
-    return a<3
-
 def inc(b):
     global a
     a=a+1
-    if temp(a):
+    if a<3:
         print(f'a: {a}')
     else:
         raise ValueError

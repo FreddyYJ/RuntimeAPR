@@ -668,6 +668,4 @@ class StateReproducer:
         print(f'States collected!')
         buggy_vars=deepcopy(self.buggy_local_vars)
         buggy_vars.update(self.buggy_global_vars)
-        predicted=self.torch_predict(buggy_vars)
-
-        exit(0)
+        return self.torch_predict(buggy_vars)
