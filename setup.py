@@ -5,7 +5,7 @@ from pathlib import Path
 
 def get_version():
     import re
-    v = re.findall(r"\nVERSION *= *\"([^\"]+)\"", Path("src/slipcover/slipcover.py").read_text())[0]
+    v = re.findall(r"\nVERSION *= *\"([^\"]+)\"", Path("src/runtimeapr/slipcover.py").read_text())[0]
     return v
 
 VERSION = get_version()
@@ -65,19 +65,8 @@ def limited_api_args():
     #    return ['-DPy_LIMITED_API=0x030a0000']
     return []
 
-
-probe = setuptools.extension.Extension(
-    'slipcover.probe',
-    sources=['src/probe.cxx'],
-    extra_compile_args=cxx_version('c++17') + platform_compile_args() + limited_api_args(),
-    extra_link_args=platform_link_args(),
-    py_limited_api=bool(limited_api_args()),
-    language='c++',
-)
-
-
 setuptools.setup(
-    name="slipcover",
+    name="runtimeapr",
     version=VERSION + dev_build,
     description="Near Zero-Overhead Python Code Coverage",
     keywords="coverage testing",
@@ -87,9 +76,8 @@ setuptools.setup(
     author="Juan Altmayer Pizzorno, Emery Berger",
     author_email="juan@altmayer.com, emery@cs.umass.edu",
     license="Apache License 2.0",
-    packages=['slipcover','slipcover.concolic','slipcover.loop'],
+    packages=['runtimeapr','runtimeapr.concolic','runtimeapr.loop'],
     package_dir={'': 'src'},
-    ext_modules=([probe]),
     python_requires=">=3.8,<3.12",
     install_requires=[
         "tabulate",

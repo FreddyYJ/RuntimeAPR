@@ -1,7 +1,7 @@
 import pytest
-import slipcover.slipcover as sc
-import slipcover.bytecode as bc
-import slipcover.branch as br
+import runtimeapr.slipcover as sc
+import runtimeapr.bytecode as bc
+import runtimeapr.branch as br
 import types
 import dis
 import sys
@@ -31,7 +31,7 @@ def ast_parse(s):
 
 @pytest.mark.parametrize("stats", [False, True])
 def test_probe_signal(stats):
-    from slipcover import probe
+    from runtimeapr import probe
 
     sci = sc.Slipcover(collect_stats=stats)
 
@@ -61,7 +61,7 @@ def test_probe_signal(stats):
 
 @pytest.mark.parametrize("stats", [False, True])
 def test_probe_deinstrument(stats):
-    from slipcover import probe
+    from runtimeapr import probe
 
     sci = sc.Slipcover(collect_stats=stats)
 
@@ -702,7 +702,7 @@ def test_deinstrument_some(stats):
 
 @pytest.mark.parametrize("do_branch", [False, True])
 def test_deinstrument_seen_upon_d_miss_threshold(do_branch):
-    from slipcover import probe as tr
+    from runtimeapr import probe as tr
 
     t = ast_parse("""
         def foo(n):

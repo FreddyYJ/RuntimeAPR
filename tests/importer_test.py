@@ -1,5 +1,5 @@
 import pytest
-import slipcover.importer as im
+import runtimeapr.importer as im
 import sys
 
 

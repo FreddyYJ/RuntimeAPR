@@ -60,13 +60,13 @@ with open(args.file, "r") as f:
     t = ast.parse(f.read())
 
 if args.branch:
-    import slipcover.branch as br
+    import runtimeapr.branch as br
     t = br.preinstrument(t)
 
 code = compile(t, args.file, "exec")
 
 if args.instrument:
-    import slipcover as sc
+    import runtimeapr as sc
     sci = sc.Slipcover(branch=args.branch)
     code = sci.instrument(code)
 

@@ -4,7 +4,6 @@ from pathlib import Path
 from types import CodeType
 from typing import List, Tuple
 
-import slipcover as sc
 import sys
 
 filename=sys.argv[1]

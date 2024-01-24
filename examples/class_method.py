@@ -13,7 +13,7 @@ class A:
     def __str__(self) -> str:
         return f'{self.a}'
 
-from slipcover.loop import except_handler
+from runtimeapr.loop import except_handler
 
 a=A()
 for _ in range(5):

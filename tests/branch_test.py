@@ -1,6 +1,6 @@
 import pytest
 import ast
-import slipcover.branch as br
+import runtimeapr.branch as br
 import sys
 
 
@@ -13,7 +13,7 @@ def ast_parse(s):
 
 def get_branches(code):
     """Extracts a list of all branches marked up in bytecode."""
-    import slipcover.bytecode as bc
+    import runtimeapr.bytecode as bc
     import types
 
     branches = []

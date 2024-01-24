@@ -2,7 +2,7 @@ def wrap_function(function):
     """Function wrapper to provide (monotonically increasing) coverage information
        while a test function is fuzzed"""
 
-    import slipcover as sc
+    import runtimeapr as sc
     sci = sc.Slipcover()
     # note no branch coverage support here (yet)
     sci.instrument(function)

@@ -1,8 +1,8 @@
 import sys
 from pathlib import Path
 from typing import Any, Dict
-import slipcover as sc
-import slipcover.branch as br
+import runtimeapr as sc
+import runtimeapr.branch as br
 import ast
 import atexit
 import platform
