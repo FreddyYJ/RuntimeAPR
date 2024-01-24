@@ -280,30 +280,32 @@ class RepairloopRunner:
 
         return (dict(),dict())
     
-    def repair(self,func_entry:Dict[str,object]):
+    def repair(self,func_entry:Dict[str,object],exc:Exception):
         while True:
             # Generate patches with OpenAI
-            print(self.bug_info.buggy_line-self.target_func.lineno+1)
-            print(self.func_code)
+            completion=self.openai_client.chat.completions.create(
+                model='gpt-4',
+                messages=[
+                    {'role':'system','content':'You are a good software engineer. Fix the provided Python code to avoid exception.'},
+                    {'role':'user','content':f'''When I run this function, this function throws {type(exc)}. Please fix {type(exc)} in this function.
+```Python
+{self.func_code}
+```
+1. Respond fixed function ONLY.
+2. {type(exc)} thrown in line {self.bug_info.buggy_line-self.target_func.lineno+1}.'''}
+                ]
+            )
+            resp=completion.choices[0].message.content
+            resp=resp[resp.find('```Python\n')+10:resp.rfind('```')]
 
-            # TODO: Add request and response
-            # completion=self.openai_client.chat.completions.create(
-            #     model='gpt-4',
-            #     messages=[
-            #         {'role':'system','content':'You are a good software engineer. Fix the provided Python code to avoid exception.'},
-            #         {'role':'user','content':''}
-            #     ]
-            # )
-            # resp=completion.choices[0].message
-
-            resp='''def inc(b):
-        global a
-        a=a+1
-        if a>=3:
-            print(f'a: {a}')
-        else:
-            print(f'a: {a}')
-    '''
+#             resp='''def inc(b):
+#     global a
+#     a=a+1
+#     if a>=3:
+#         print(f'a: {a}')
+#     else:
+#         print(f'a: {a}')
+# '''
 
             patched_code=compile(resp,self.fn.__code__.co_filename,'exec')
             patched_bytecode=Bytecode.from_code(patched_code)
@@ -380,7 +382,7 @@ class RepairloopRunner:
         func_entry=reproducer.reproduce()
 
         # Repair
-        return self.repair(func_entry)
+        return self.repair(func_entry,from_error)
 
         while not is_same:
             if self.trial>MAX_TRIAL:

@@ -5,7 +5,6 @@ def inc(b):
     a=a+1
     if a>=3:
         raise ValueError
-        
     else:
         print(f'a: {a}')
 
