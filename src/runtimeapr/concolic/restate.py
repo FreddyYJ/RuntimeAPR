@@ -2,6 +2,7 @@ from enum import Enum
 from functools import partial
 import random
 import struct
+from time import sleep
 import numpy as np
 
 from sympy import Q
@@ -367,7 +368,7 @@ class StateReproducer:
         for diff in self.diffs[1:]:
             args,kwargs,globals,mutated_objects,local_vars,global_vars=diff
             y_values=[]
-            # y is args, kwargs, globals that we want to predict
+            # y is array of args, kwargs, globals that we want to predict (3-dim)
             for name in input_keys:
                 if name in mutated_objects:
                     y_orig_value=mutated_objects[name]
@@ -381,18 +382,21 @@ class StateReproducer:
                         # args
                         y_orig_value=get_original_value(args[self.arg_names.index(root_name)],root_name,name)
                     
-                if isinstance(y_orig_value,str):
+                if isinstance(y_orig_value,int) or isinstance(y_orig_value,float):
+                    y_orig_value=[y_orig_value]
+                elif isinstance(y_orig_value,str):
                     # Convert string to unicode number
                     unicode_values=[]
                     unicode_values.extend(ord(c) for c in y_orig_value)
-                    y_orig_value=unicode_values
+                    y_value=unicode_values
+
                 if is_mutable_obj(y_orig_value):
                     y_values.append(y_orig_value)
                     y_types.append(type(y_orig_value))
 
             y.append(y_values)
             
-            # x is current states
+            # x is array current states (3-dim)
             x_values=[]
             for name in output_keys:
                 if name in local_vars:
@@ -406,7 +410,9 @@ class StateReproducer:
                     x_value=self.buggy_global_vars[name]
                 
                 if is_mutable_obj(x_value):
-                    if isinstance(x_value,str):
+                    if isinstance(x_value,int) or isinstance(x_value,float):
+                        x_value=[x_value]
+                    elif isinstance(x_value,str):
                         # Convert string to unicode number
                         unicode_values=[]
                         unicode_values.extend(ord(c) for c in x_value)
@@ -431,9 +437,15 @@ class StateReproducer:
         for i in x_keys:
             t_x.append(temp_x[i])
         
-        # with open('data.json','w') as f:
-        #     import json
-        #     json.dump({'x':x,'y':y,'target_x':t_x},f,indent=4)
+        with open('data.json','w') as f:
+            import json
+            json.dump({'x':x,'y':y,'target_x':t_x},f,indent=4)
+        with open('x.txt','w') as f:
+            f.write(str(x))
+        with open('y.txt','w') as f:
+            f.write(str(y))
+        with open('target_x.txt','w') as f:
+            f.write(str(t_x))
         
         # Create model
         y_tensor=torch.tensor(y,dtype=torch.float64,device=self.device)
@@ -484,7 +496,7 @@ class StateReproducer:
                 target_y:list=target_y_tensor.cpu().numpy().tolist()
             
             for i,y_value in enumerate(target_y.copy()):
-                if isinstance(y[0][i],int):
+                if len(y[0][i])==1 and isinstance(y[0][i][0],int):
                     target_y[i]=int(y_value)
             
             predicted:Dict[str,object]=dict()
@@ -665,7 +677,7 @@ class StateReproducer:
                 
                 trial+=1
 
-        print(f'States collected!')
+        print(f'Failed to reproduce entry states, using Neural Network!')
         buggy_vars=deepcopy(self.buggy_local_vars)
         buggy_vars.update(self.buggy_global_vars)
         return self.torch_predict(buggy_vars)
