@@ -161,6 +161,7 @@ class StateReproducer:
                 else:
                     print(f'Mutate local var {name}: {base_obj} -> {obj}')
                     # Find the corresponding argument, kwargs, globals
+                    # TODO: Temporary remove def-use chain
                     cand_args=set(pos_args)
                     cand_kwargs=set(kw_arg)
                     cand_globals=set(self.global_vars.keys())
@@ -181,6 +182,7 @@ class StateReproducer:
                 else:
                     print(f'Mutate global var {name}: {base_obj} -> {obj}')
                     # Find the corresponding argument, kwargs, globals
+                    # TODO: Temporary remove def-use chain
                     cand_args=set(pos_args)
                     cand_kwargs=set(kw_arg)
                     cand_globals=set(self.global_vars.keys())
