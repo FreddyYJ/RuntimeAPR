@@ -1,3 +1,4 @@
+import ast
 from enum import Enum
 from functools import partial
 import random
@@ -19,7 +20,7 @@ import torch
 import torch.nn as nn
 
 class StateReproducer:
-    def __init__(self,fn:FunctionType,args_names,buggy_local_vars:Dict[str,object],buggy_global_vars:Dict[str,object],
+    def __init__(self,fn:FunctionType,args_names:ast.arguments,buggy_local_vars:Dict[str,object],buggy_global_vars:Dict[str,object],
                 #  args:List[object],kwargs:Dict[str,object],def_use_chain:List[DefUseGraph.Node]):
                 args:List[object],kwargs:Dict[str,object],global_vars:Dict[str,object],def_use_chain:Dict[str,List[str]]):
         self.fn=fn
@@ -137,55 +138,59 @@ class StateReproducer:
         return local_diffs,global_diffs
 
     def find_candidate_inputs(self,local_vars:Dict[str,object],global_vars:Dict[str,object]):
-        local_diffs,global_diffs=self.is_vars_same(local_vars,global_vars)
-
         pos_args=[]
         for arg in self.args_names.posonlyargs:
             pos_args.append(arg.arg)
         for arg in self.args_names.args:
             pos_args.append(arg.arg)
-        var_arg=self.args_names.vararg.arg if self.args_names.vararg else None
+        var_arg=self.args_names.vararg.arg if self.args_names.vararg else []
         kwonly_args=[]
         for arg in self.args_names.kwonlyargs:
             kwonly_args.append(arg.arg)
-        kw_arg=self.args_names.kwarg.arg if self.args_names.kwarg else None
+        kw_arg=self.args_names.kwarg.arg if self.args_names.kwarg else []
 
         cand_args:Set[str]=set()
         cand_kwargs:Set[str]=set()
         cand_globals:Set[str]=set()
-        if len(local_diffs)!=0:
+        if len(local_vars)!=0:
             print('Mutate local variables...')
-            for name,(obj,base_obj) in local_diffs.items():
+            for name,(obj,base_obj) in local_vars.items():
                 if base_obj is None:
                     print(f'New local var {name}: {obj}')
                     # TODO new local var found
                 else:
                     print(f'Mutate local var {name}: {base_obj} -> {obj}')
                     # Find the corresponding argument, kwargs, globals
-                    for use in self.def_use_chains[name]:
-                        if use.split('.')[0] in pos_args and not is_default_local(self.fn,use.split('.')[0],self.args[self.arg_names.index(use.split('.')[0])]):
-                            cand_args.add(use)
-                        elif use.split('.')[0] in kwonly_args and not is_default_local(self.fn,use.split('.')[0],self.kwargs[use.split('.')[0]]):
-                            cand_kwargs.add(use)
-                        elif use.split('.')[0] in self.global_vars:
-                            cand_globals.add(use)
+                    cand_args=set(pos_args)
+                    cand_kwargs=set(kw_arg)
+                    cand_globals=set(self.global_vars.keys())
+                    # for use in self.def_use_chains[name]:
+                    #     if use.split('.')[0] in pos_args and not is_default_local(self.fn,use.split('.')[0],self.args[self.arg_names.index(use.split('.')[0])]):
+                    #         cand_args.add(use)
+                    #     elif use.split('.')[0] in kwonly_args and not is_default_local(self.fn,use.split('.')[0],self.kwargs[use.split('.')[0]]):
+                    #         cand_kwargs.add(use)
+                    #     elif use.split('.')[0] in self.global_vars:
+                    #         cand_globals.add(use)
 
-        if len(global_diffs)!=0:
+        if len(global_vars)!=0:
             print('Mutate global variables...')
-            for name,(obj,base_obj) in global_diffs.items():
+            for name,(obj,base_obj) in global_vars.items():
                 if base_obj is None:
                     print(f'New global var {name}: {obj}')
                     # TODO new global var found
                 else:
                     print(f'Mutate global var {name}: {base_obj} -> {obj}')
                     # Find the corresponding argument, kwargs, globals
-                    for use in self.def_use_chains[name]:
-                        if use.split('.')[0] in pos_args and not is_default_local(self.fn,use.split('.')[0],self.args[self.arg_names.index(use.split('.')[0])]):
-                            cand_args.add(use)
-                        elif use.split('.')[0] in kwonly_args and not is_default_local(self.fn,use.split('.')[0],self.kwargs[use.split('.')[0]]):
-                            cand_kwargs.add(use)
-                        elif use.split('.')[0] in self.global_vars:
-                            cand_globals.add(use)
+                    cand_args=set(pos_args)
+                    cand_kwargs=set(kw_arg)
+                    cand_globals=set(self.global_vars.keys())
+                    # for use in self.def_use_chains[name]:
+                    #     if use.split('.')[0] in pos_args and not is_default_local(self.fn,use.split('.')[0],self.args[self.arg_names.index(use.split('.')[0])]):
+                    #         cand_args.add(use)
+                    #     elif use.split('.')[0] in kwonly_args and not is_default_local(self.fn,use.split('.')[0],self.kwargs[use.split('.')[0]]):
+                    #         cand_kwargs.add(use)
+                    #     elif use.split('.')[0] in self.global_vars:
+                    #         cand_globals.add(use)
 
         if len(cand_args)!=0:
             print(f'Candidate args: {cand_args}')
