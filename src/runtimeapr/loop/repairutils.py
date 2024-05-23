@@ -51,17 +51,16 @@ def prune_default_global_var(fn,global_vars:Dict[str,Any]):
 def is_default_local(fn:FunctionType,name,obj):
     if name.startswith("__") and name.endswith("__"):
         return True
-    elif name=='_sc_e':
+    if name=='_sc_e':
         return True
-    elif inspect.isfunction(obj) or inspect.ismodule(obj) or inspect.ismethod(obj) or inspect.isclass(obj):
+    if inspect.isfunction(obj) or inspect.ismodule(obj) or inspect.ismethod(obj) or inspect.isclass(obj):
         return True
-    elif '_lru_cache_wrapper' in str(type(obj)):
+    if '_lru_cache_wrapper' in str(type(obj)):
         return True
-    elif 'method-wrapper' in str(type(obj)):
+    if 'method-wrapper' in str(type(obj)):
         return True
-    elif 'builtin_function_or_method' in str(type(obj)):
+    if 'builtin_function_or_method' in str(type(obj)):
         return True
-    
     if name==fn.__name__:
         return True
     return False
