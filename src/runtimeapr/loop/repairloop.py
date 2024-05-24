@@ -8,6 +8,7 @@ from types import FrameType, FunctionType, MethodType
 from typing import Any, Dict, List, Optional, Set, Tuple, Union
 import ast
 import traceback
+from time import sleep
 
 import z3
 from bytecode import Bytecode
@@ -285,16 +286,25 @@ class RepairloopRunner:
     def repair(self,func_entry:Dict[str,object],exc:Exception):
         while True:
             # Generate patches with OpenAI
+            _buggy_line=self.bug_info.buggy_line-self.target_func.lineno+1
+            _index=-1
+            _counter=0
+            while _counter<_buggy_line:
+                _index=self.func_code.find('\n',_index+1)
+                _counter+=1
+            _counter-=1
+
+            code=self.func_code[:_index]+f'  # {type(exc)} thrown in here'+self.func_code[_index:]
+            
             completion=self.openai_client.chat.completions.create(
                 model='gpt-4',
                 messages=[
                     {'role':'system','content':'You are a good software engineer. Fix the provided Python code to avoid exception.'},
                     {'role':'user','content':f'''When I run this function, this function throws {type(exc)}. Please fix {type(exc)} in this function.
 ```Python
-{self.func_code}
+{code}
 ```
-1. Respond fixed function ONLY.
-2. {type(exc)} thrown in line {self.bug_info.buggy_line-self.target_func.lineno+1}.'''}
+1. Respond fixed function ONLY.'''}
                 ]
             )
             resp=completion.choices[0].message.content
@@ -308,6 +318,7 @@ class RepairloopRunner:
 #     else:
 #         print(f'a: {a}')
 # '''
+            print(f'Patched code:\n{resp}')
 
             patched_code=compile(resp,self.fn.__code__.co_filename,'exec')
             patched_bytecode=Bytecode.from_code(patched_code)
@@ -355,7 +366,8 @@ class RepairloopRunner:
         # cached_result=dict()
         # pos_args=[]
         # for pos_arg in buggy_args:
-        #     convert_json(pos_arg,cached_result)
+        #     convert_json(pos_arg,cached_result)yj1411@@
+        
         #     pos_args.append(id(pos_arg))
         # kw_args=dict()
         # for name,kw_arg in buggy_kwargs.items():

@@ -68,7 +68,7 @@ class Instrumenter:
         #     if bc.name.endswith(os.environ['FUNC_NAME']):
         #         new_bc.append(Instr('LOAD_CONST',0,lineno=cur_lineno))
         #         new_bc.append(Instr('LOAD_CONST',('func_entry',),lineno=cur_lineno))
-        #         new_bc.append(Instr('IMPORT_NAME','slipcover.loop.repairloop',lineno=cur_lineno))
+        #         new_bc.append(Instr('IMPORT_NAME','runtimeapr.loop.repairloop',lineno=cur_lineno))
         #         new_bc.append(Instr('IMPORT_FROM','func_entry',lineno=cur_lineno))
         #         if is_global:
         #             new_bc.append(Instr('STORE_NAME', 'func_entry', lineno=cur_lineno))
@@ -128,6 +128,7 @@ class Instrumenter:
         except_block.append(Instr('LOAD_CONST', ('except_handler',), lineno=instr.lineno))
         except_block.append(Instr('IMPORT_NAME', 'slipcover.loop', lineno=instr.lineno))
         except_block.append(Instr('IMPORT_FROM', 'except_handler', lineno=instr.lineno))
+
         if is_global:
             except_block.append(Instr('STORE_NAME', 'except_handler', lineno=cur_lineno))
         else:
