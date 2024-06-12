@@ -23,7 +23,6 @@ from .repairutils import BugInformation,prune_default_global_var,is_default_glob
 from ..concolic import ConcolicTracer,get_zvalue,zint,symbolize,ControlDependenceGraph,Block,ConditionTree,ConditionNode,DefUseGraph
 from ..configure import Configure
 from ..concolic.restate import StateReproducer
-from ..concolic.restore_str.restate_str import StrStateReprodcer
 from ..concolic.defusegraph import DependencyGraph
 
 is_concolic_execution=False
@@ -71,7 +70,7 @@ class RepairloopRunner:
         self.is_append=False
 
         # OpenAI stuffs
-        self.openai_client=OpenAI()
+        ### TODO: remove comment!!!!!! self.openai_client=OpenAI()
 
     def run_concolic(self,before_values:Dict[str,Any]) -> Tuple[List[z3.BoolRef],Dict[str,object],Dict[str,object]]:
         """
@@ -396,6 +395,8 @@ class RepairloopRunner:
         func_entry=reproducer.reproduce()
 
         # Repair
+        print("\033[94mFunction entry found:\033[0m", func_entry)
+        exit(0)
         return self.repair(func_entry,from_error)
 
         while not is_same:

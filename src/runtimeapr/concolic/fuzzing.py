@@ -53,14 +53,14 @@ class Fuzzer:
         self.corpus: List[Tuple[List[object], Dict[str, object], Dict[str, object]]] = []
         self.candidate_vars: List[str] = []
 
-        self.examples: list[
-            Tuple[Tuple[list[object], dict[str, object], dict[str, object]], Tuple[list[object], dict[str, object]]]
+        self.examples: List[
+            Tuple[Tuple[List[object], Dict[str, object], Dict[str, object]], Tuple[List[object], Dict[str, object]]]
         ] = []
         """ [((in_args, in_kwargs, in_globals), (out_args, out_globals))]"""
 
         self.diffs = []
 
-    def mutate_object(self, obj: object, prev_name: str, continue_mutate=True):
+    def mutate_object(self, obj: object, prev_name='', continue_mutate=True):
         if continue_mutate:
             if isinstance(obj, Enum):
                 # For Enum object, select a random value
@@ -174,6 +174,7 @@ class Fuzzer:
         return obj
 
     def _args_mutatible(self, args: List[object]):
+        ### TODO: adapt for changing args
         for arg in args:
             if hasattr(arg, '__dict__') and not isinstance(arg, str) and not isinstance(arg, bytes):
                 return True
@@ -253,12 +254,13 @@ class Fuzzer:
 
         # Mutate the arguments
         if change_args:
+            print("HAAAAAAAAAAAAA")
             arg_names = list(inspect.signature(self.fn).parameters.keys())
             for i, arg in enumerate(copy_args):
                 if is_default_local(self.fn, f'arg{i}', arg):
                     # Do not mutate default arguments
                     continue
-
+                ### TODO: adapt for changing args
                 if hasattr(arg, '__dict__'):
                     for name, field in getattr(arg, '__dict__').items():
                         if not is_default_local(self.fn, name, field):
@@ -480,7 +482,7 @@ class Fuzzer:
         new_globals: Dict[str, object],
         verbose=True,
     ) -> Tuple[
-        dict[str, object], dict[str, object], Optional[Exception], int
+        Dict[str, object], Dict[str, object], Optional[Exception], int
     ]:  # Tuple[List[z3.BoolRef],Dict[str,object],Dict[str,object]]:
         """
         Run concolic execution with given values.

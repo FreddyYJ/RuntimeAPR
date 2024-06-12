@@ -1,12 +1,13 @@
 from .ast_types import *
+from typing import List
 
 
 def is_correct_char(c: str) -> bool:
     return c != "(" and c != ")" and not c.isspace() and c != "\""  # c.isalnum()
 
 
-def normalize_str(string: str) -> list[str]:
-    str_norm: list[str] = []
+def normalize_str(string: str) -> List[str]:
+    str_norm: List[str] = []
     last_c = ""
     is_in_str = False
     for c in string:
@@ -29,7 +30,7 @@ def normalize_str(string: str) -> list[str]:
     return str_norm
 
 
-def list_ast_to_tast(last: str | list) -> TAST:
+def list_ast_to_tast(last: Union[str, list]) -> TAST:
     # end cases
     if not last:
         assert False, "Empty Token"
@@ -117,8 +118,8 @@ def list_ast_to_tast(last: str | list) -> TAST:
     raise ValueError("Unknown Token:", str(last[0]))
 
 
-def get_ast(input_norm: list[str]) -> list[str | list]:
-    ast: list[str | list] = []
+def get_ast(input_norm: List[str]) -> List[Union[str, list]]:
+    ast: List[Union[str, list]] = []
     i = 0
     while i < len(input_norm):
         symbol = input_norm[i]

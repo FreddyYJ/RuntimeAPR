@@ -126,7 +126,7 @@ class Instrumenter:
             except_block.append(Instr('RAISE_VARARGS', 0, lineno=cur_lineno))
         except_block.append(Instr('LOAD_CONST', 0, lineno=instr.lineno))
         except_block.append(Instr('LOAD_CONST', ('except_handler',), lineno=instr.lineno))
-        except_block.append(Instr('IMPORT_NAME', 'slipcover.loop', lineno=instr.lineno))
+        except_block.append(Instr('IMPORT_NAME', 'runtimeapr.loop', lineno=instr.lineno))
         except_block.append(Instr('IMPORT_FROM', 'except_handler', lineno=instr.lineno))
 
         if is_global:

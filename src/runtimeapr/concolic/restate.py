@@ -1,4 +1,3 @@
-
 import ast
 from enum import Enum
 from functools import partial
@@ -55,7 +54,6 @@ class StateReproducer:
         self.kwargs = kwargs
         self.global_vars = prune_default_global_var(self.fn, global_vars)
         self.def_use_chains = def_use_chain
-        print("defuse\033[94m", def_use_chain, "\033[0m")
         self.examples = []
         """
             [ (globals, local_diffs, global_diffs) ]
@@ -80,6 +78,7 @@ class StateReproducer:
         new_args: List[object],
         new_kwargs: Dict[str, object],
         new_globals: Dict[str, object],
+        verbose=True,
     ):
         # Prune default variables
         next_globals = prune_default_global_var(self.fn, new_globals)
@@ -92,7 +91,8 @@ class StateReproducer:
             is_concolic_execution = True
             result = self.fn(*args, **kwargs)
         except Exception as _exc:
-            print(f'Exception raised: {type(_exc)}: {_exc}')
+            if verbose:
+                print(f'Exception raised: {type(_exc)}: {_exc}')
             innerframes = inspect.getinnerframes(_exc.__traceback__)
             innerframes.reverse()
             inner_info: inspect.FrameInfo = innerframes[0]
@@ -108,19 +108,21 @@ class StateReproducer:
 
         return None, None
 
-    def is_vars_same(self, local_vars: Dict[str, object], global_vars: Dict[str, object]):
+    def is_vars_same(self, local_vars: Dict[str, object], global_vars: Dict[str, object], verbose=True):
         is_same = True
         local_diffs: Dict[str, Tuple[object]] = dict()
         global_diffs: Dict[str, Tuple[object]] = dict()
 
-        print('Compare local variables...')
+        if verbose:
+            print('Compare local variables...')
         for name, obj in local_vars.items():
             if is_default_local(self.fn, name, obj):
                 continue
 
             if name not in self.buggy_local_vars:
                 is_same = False
-                print(f'New local var {name}: {obj}')
+                if verbose:
+                    print(f'New local var {name}: {obj}')
                 local_diffs[name] = (obj, None)
                 continue
 
@@ -137,14 +139,16 @@ class StateReproducer:
             # if not is_same:
             #     break
 
-        print('Compare global variables...')
+        if verbose:
+            print('Compare global variables...')
         for name, obj in global_vars.items():
             if is_default_global(self.fn, name, obj):
                 continue
 
             if name not in self.buggy_global_vars:
                 # is_same=False
-                print(f'New global var {name}: {obj}')
+                if verbose:
+                    print(f'New global var {name}: {obj}')
                 global_diffs[name] = (obj, None)
                 continue
 
@@ -160,41 +164,44 @@ class StateReproducer:
                 is_same = False
             # if not is_same:
             #     break
-
-        if is_same:
-            print(f'Same result in restate!')
-        else:
-            print(f'Different result!')
+        if verbose:
+            if is_same:
+                print(f'Same result in restate!')
+            else:
+                print(f'Different result!')
 
         return local_diffs, global_diffs
 
-    def find_candidate_inputs(self, local_vars: Dict[str, object], global_vars: Dict[str, object]):
+    def find_candidate_inputs(self, local_vars: Dict[str, object], global_vars: Dict[str, object], verbose=True):
         pos_args = []
         for arg in self.args_names.posonlyargs:
             pos_args.append(arg.arg)
         for arg in self.args_names.args:
             pos_args.append(arg.arg)
-        var_arg=self.args_names.vararg.arg if self.args_names.vararg else []
+        var_arg = self.args_names.vararg.arg if self.args_names.vararg else []
         kwonly_args = []
         for arg in self.args_names.kwonlyargs:
             kwonly_args.append(arg.arg)
-        kw_arg=self.args_names.kwarg.arg if self.args_names.kwarg else []
+        kw_arg = self.args_names.kwarg.arg if self.args_names.kwarg else []
 
         cand_args: Set[str] = set()
         cand_kwargs: Set[str] = set()
         cand_globals: Set[str] = set()
         if len(local_vars) != 0:
-            print('Mutate local variables...')
+            if verbose:
+                print('Mutate local variables...')
             for name, (obj, base_obj) in local_vars.items():
                 if base_obj is None:
-                    print(f'New local var {name}: {obj}')
+                    if verbose:
+                        print(f'New local var {name}: {obj}')
                     # TODO new local var found
                 else:
-                    print(f'Mutate local var {name}: {base_obj} -> {obj}')
+                    if verbose:
+                        print(f'Mutate local var {name}: {base_obj} -> {obj}')
                     # Find the corresponding argument, kwargs, globals
-                    cand_args=set(pos_args)
-                    cand_kwargs=set(kw_arg)
-                    cand_globals=set(self.global_vars.keys())
+                    cand_args = set(pos_args)
+                    cand_kwargs = set(kw_arg)
+                    cand_globals = set(self.global_vars.keys())
                     # for use in self.def_use_chains[name]:
                     #     if use.split('.')[0] in pos_args and not is_default_local(self.fn,use.split('.')[0],self.args[self.arg_names.index(use.split('.')[0])]):
                     #         cand_args.add(use)
@@ -203,18 +210,24 @@ class StateReproducer:
                     #     elif use.split('.')[0] in self.global_vars:
                     #         cand_globals.add(use)
 
-        if len(global_vars)!=0:
-            print('Mutate global variables...')
+        if len(global_vars) != 0:
+            if verbose:
+                print('Mutate global variables...')
             for name, (obj, base_obj) in global_vars.items():
                 if base_obj is None:
-                    print(f'New global var {name}: {obj}')
+                    if verbose:
+                        print(f'New global var {name}: {obj}')
                     # TODO new global var found
                 else:
-                    print(f'Mutate global var {name}: {base_obj} -> {obj}')
+                    if verbose:
+                        print(f"{name}")
+                        print(f'{base_obj}')
+                        print(f"{obj}")
+                        print(f'Mutate global var {name}: {base_obj} -> {obj}')
                     # Find the corresponding argument, kwargs, globals
-                    cand_args=set(pos_args)
-                    cand_kwargs=set(kw_arg)
-                    cand_globals=set(self.global_vars.keys())
+                    cand_args = set(pos_args)
+                    cand_kwargs = set(kw_arg)
+                    cand_globals = set(self.global_vars.keys())
                     # for use in self.def_use_chains[name]:
                     #     if use.split('.')[0] in pos_args and not is_default_local(self.fn,use.split('.')[0],self.args[self.arg_names.index(use.split('.')[0])]):
                     #         cand_args.add(use)
@@ -222,17 +235,17 @@ class StateReproducer:
                     #         cand_kwargs.add(use)
                     #     elif use.split('.')[0] in self.global_vars:
                     #         cand_globals.add(use)
-
-        if len(cand_args) != 0:
-            print(f'Candidate args: {cand_args}')
-        if len(cand_kwargs) != 0:
-            print(f'Candidate kwargs: {cand_kwargs}')
-        if len(cand_globals) != 0:
-            print(f'Candidate globals: {cand_globals}')
+        if verbose:
+            if len(cand_args) != 0:
+                print(f'Candidate args: {cand_args}')
+            if len(cand_kwargs) != 0:
+                print(f'Candidate kwargs: {cand_kwargs}')
+            if len(cand_globals) != 0:
+                print(f'Candidate globals: {cand_globals}')
 
         return cand_args, cand_kwargs, cand_globals
 
-    def mutate_object(self, obj: object, name: str, candidate_name: List[str], mutated_values=dict()):
+    def mutate_object(self, obj: object, name: str, candidate_name: List[str], mutated_values=dict(), verbose=True):
         if name in candidate_name:
             if (
                 isinstance(obj, FunctionType)
@@ -243,7 +256,8 @@ class StateReproducer:
                 mutated_values[name] = obj
                 return obj
 
-            print(f'Mutate {name}')
+            if verbose:
+                print(f'Mutate {name}')
             if isinstance(obj, Enum):
                 # For Enum object, select a random value
                 candidates = []
@@ -278,19 +292,28 @@ class StateReproducer:
                 # Insert random characters
                 while len(new_str) <= MAX_STR_LEN and random.randint(0, 1) == 1:
                     index = random.randint(0, len(new_str))
-                    new_str = new_str[:index] + chr(random.randint(0, 255)) + new_str[index:]
+                    new_char = chr(random.randint(32, 255))
+                    while '\\' in new_char or '"' in new_char or ';' in new_char:
+                        new_char = chr(random.randint(32, 255))
+                    new_str = new_str[:index] + new_char + new_str[index:]
 
                 if new_str != obj:
                     mutated_values[name] = new_str
                     return new_str
 
                 if len(new_str) == 0:
-                    mutated_values[name] = chr(random.randint(0, 255))
+                    new_char = chr(random.randint(32, 255))
+                    while '\\' in new_char or '"' in new_char or ';' in new_char:
+                        new_char = chr(random.randint(32, 255))
+                    mutated_values[name] = new_char
                     return mutated_values[name]
                 else:
                     # Still the same string, mutate a random character
                     index = random.randint(0, len(new_str) - 1)
-                    mutated_values[name] = new_str[:index] + chr(random.randint(0, 255)) + new_str[index + 1 :]
+                    new_char = chr(random.randint(32, 255))
+                    while '\\' in new_char or '"' in new_char or ';' in new_char:
+                        new_char = chr(random.randint(32, 255))
+                    mutated_values[name] = new_str[:index] + new_char + new_str[index + 1 :]
                     return mutated_values[name]
 
             elif isinstance(obj, bytes):
@@ -559,8 +582,9 @@ class StateReproducer:
                     new_globals[name] = obj
             reproduced_local_vars, reproduced_global_vars = self.run(new_args, new_kwargs, new_globals)
             if reproduced_local_vars is None:
-                pass
-
+                # the output didn't resulted in an error
+                ### TODO: do something usefull
+                continue
             local_diffs, global_diffs = self.is_vars_same(
                 prune_default_local_var(self.fn, reproduced_local_vars),
                 prune_default_global_var(self.fn, reproduced_global_vars),
@@ -706,6 +730,8 @@ class StateReproducer:
                         prune_default_global_var(self.fn, reproduced_global_vars),
                     )
                 )
+                # do not consider strings please
+                cur_global_values = dict(filter(lambda x: not isinstance(x[1], str), tuple(cur_global_values)))
                 self.diffs.append(
                     (
                         new_args,
@@ -778,7 +804,7 @@ class StateReproducer:
         if self.generate_args():  # just because python tries to optimize it by running the latest before
 
             MAX_TRIALS = 10
-            fun_gens: dict[str, FunctionGenerator] = dict()
+            fun_gens: Dict[str, FunctionGenerator] = dict()
             str_var_names = []
             for varname, value in self.buggy_global_vars.items():
                 if isinstance(value, str):
@@ -793,7 +819,6 @@ class StateReproducer:
             for trial in range(1, MAX_TRIALS + 1):
 
                 for varname, fun_gen in fun_gens.items():
-                    print("Found", len(fun_gen.examples), "examples")
                     state = fun_gen.get_expected_state(debug=True)
                     print(state)
                     str_states[varname] = state
@@ -815,3 +840,4 @@ class StateReproducer:
 
                 for fun in fun_gens.values():
                     fun.improve(str_states[varname], reproduced_local_vars, reproduced_global_vars)
+                self.generate_args()

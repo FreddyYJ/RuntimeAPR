@@ -1,8 +1,9 @@
 from typing import Tuple, Union
 from .ast_types import get_type
+from typing import Dict, List
 
 
-def pretty_in(inType: list[str], x: Tuple[int, Union[int, str, bool]]) -> str:
+def pretty_in(inType: List[str], x: Tuple[int, Union[int, str, bool]]) -> str:
     index, object = x
     if inType[index] == 'String':
         new_object = object.replace('\\', '\\\\')
@@ -19,12 +20,12 @@ def pretty_out(outType: str, object: Union[int, str, bool]) -> str:
 
 def lisp_from_examples(
     spec: Tuple[
-        list[str],
+        List[str],
         str,
-        list[Tuple[dict[str, Union[str, int, bool]], Union[str, int, bool]]],
+        List[Tuple[Dict[str, Union[str, int, bool]], Union[str, int, bool]]],
     ],
-    additional_int: list[int] = [],
-    additional_str: list[str] = [],
+    additional_int: List[int] = [],
+    additional_str: List[str] = [],
 ) -> str:
     """
     Generate a string respecting the SysGus Language Specification.

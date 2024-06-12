@@ -5,7 +5,7 @@ from .lisp_interpret import function_from_string
 from .ast_types import get_type
 from ...fuzzing import Fuzzer
 import os
-from typing import Optional, Tuple, Union
+from typing import Optional, Tuple, Union, Dict, List
 import random as rd
 import re
 
@@ -18,7 +18,7 @@ class FunctionGenerator:
     def __init__(
         self,
         buggy_var: str,
-        examples: list[Tuple[dict[str, object], dict[str, object], dict[str, object]]],
+        examples: List[Tuple[Dict[str, object], Dict[str, object], Dict[str, object]]],
         buggy_locals,
         buggy_globals,
         fuzzer: Fuzzer,
@@ -27,7 +27,7 @@ class FunctionGenerator:
         # global_vars,
         # local_diffs,
         # global_diffs,
-        # examples: list[Tuple[list[Union[str, int, bool]], Union[str, int, bool]]],
+        # examples: List[Tuple[List[Union[str, int, bool]], Union[str, int, bool]]],
     ):
         self.fuzzer = fuzzer
         self.buggy_var = buggy_var
@@ -35,7 +35,7 @@ class FunctionGenerator:
         self.buggy_globals = buggy_globals
 
         # the order of the dict keys should not be changed as the dict will not be modified
-        self.examples: list[Tuple[list[str | int | bool], str | int | bool]] = list(
+        self.examples: List[Tuple[Dict[Union[str, int, bool], Union[str, int, bool]], Union[str, int, bool]]] = list(
             map(
                 lambda ex: (
                     {**ex[2], **ex[1]},
@@ -62,26 +62,15 @@ class FunctionGenerator:
         [ (outputs, buggy_variable_input) ]
         """
 
-        # assert len(local_diffs) == len(global_diffs) == len(examples), 'The given sizes do not match'
-        # self.local_diff = local_diffs
-        # self.global_diff = global_diffs
-        # self.fuzzer.examples = examples
-        # # multiple possible input types but only one output type (the type of the var to restore, ie string)
-        # self.inTypes = list(map(lambda ex: get_type(ex[0]), examples))
-        # self.outType = get_type(examples[0][1])
-        # self.args = args
-        # self.kwargs = kwargs
-        # self.global_vars = global_vars
-
         self.path_to_duet = '/'.join(__file__.split('/')[:-1]) + '/../duet/'
-        self.additional_examples: list[Tuple[list[Union[str, int, bool]], Union[str, int, bool]]] = []
-        self.timeout = 5
-        self.max_examples = 40
+        self.additional_examples: List[Tuple[List[Union[str, int, bool]], Union[str, int, bool]]] = []
+        self.timeout = 15
+        self.max_examples = 100
         self.inTypes = list(map(get_type, self.examples[0][0].values()))
 
     def prune_heuristic(self):
         return rd.sample(self.examples, self.max_examples)
-        ### TODO: get len global and local diff AND verify wether reverse true or not (default ascending)
+        ### TODO: get len global and local diff
         order = sorted(
             range(len(self.global_diff)),
             key=lambda k: len(self.local_diff[k]) + len(self.global_diff[k]),
@@ -95,23 +84,18 @@ class FunctionGenerator:
         return self.prune_heuristic() + self.additional_examples
 
     def improve(self, bad_in_state=None, good_in_state=None, good_out_state=None):
-        ### TODO: fuzz changing only the current working variable
         if bad_in_state is None:
-            if self.timeout > 5:
-                self.timeout += 0.5
-            else:
-                self.timeout += 1
-
+            self.timeout += 1
         else:
-            # assert good_(in|out)_state is not None
-            self.additional_examples.append((good_in_state, good_out_state))
+            # TODO: someting along the line of self.additional_examples.append((good_in_state, good_out_state))
+            ...
         if self.max_examples > self.fuzzer.examples:
             # TODO: Do more fuzzing I guess and remember examples
             ...
         if self.max_examples > 10000:
             self.max_examples = 100
         else:
-            self.max_examples = int(1.5 * self.max_examples)
+            self.max_examples = int(1.3 * self.max_examples)
 
     def get_file_name(self) -> str:
         return self.path_to_duet + '_spec_to_synth.sl'
@@ -135,12 +119,6 @@ class FunctionGenerator:
 
         returns a function of the form (define-fun f (<(_arg_i inType_i)>) outType (<body>))
         """
-        if not os.path.exists(self.path_to_duet + 'main.native'):
-            if subprocess.run(["make", "--directory", self.path_to_duet]).returncode:
-                subprocess.run([self.path_to_duet + "build"], shell=True)
-                if subprocess.run(["make", "--directory", self.path_to_duet]).returncode:
-                    print("Unable to install the Duet Framework. Try doing it manually.")
-                    exit(127)
 
         try:
             result = subprocess.run(
@@ -156,7 +134,7 @@ class FunctionGenerator:
         except Exception as e:
             raise e
         if "err" in result.stderr:
-            print("An unexpected error occured", result.stderr)
+            print("\033[91mAn unexpected error occured:\033[0m", result.stderr)
             exit(3)
         # the output is in stderr
         return result.stderr.split('\n')[1]
@@ -184,22 +162,22 @@ class FunctionGenerator:
         args = {}
         for varname in self.arg_order:
             if varname in self.buggy_locals:
-                print("local:", varname, self.buggy_locals[varname])
+                if debug:
+                    print("local:", varname, self.buggy_locals[varname])
                 args[varname] = self.buggy_locals[varname]
             else:
-                print("global:", varname, self.buggy_globals[varname])
-
+                if debug:
+                    print("global:", varname, self.buggy_globals[varname])
                 args[varname] = self.buggy_globals[varname]
 
-        ### TODO: force the order of the argument call to be the same as self.examples
         out = function(*(args[varname] for varname in self.examples[0][0]))
 
         if debug:
             print('The function has been parsed:\n', function)
             print('Expected faulty input:', out)
         else:
-            for file in os.listdir("/mydir"):
-                if file.startswith(filename):
+            for file in os.listdir(self.path_to_duet):
+                if file.startswith(filename.split("/")[-1]):
                     os.remove(file)
 
         return out
