@@ -8,10 +8,4 @@ def f(n: int) -> str:
         raise ValueError
     return my_str
 
-
-from runtimeapr.loop import except_handler
-
-try:
-    print(f(6))
-except Exception as _e:
-    except_handler(_e)
+print(f(6))
