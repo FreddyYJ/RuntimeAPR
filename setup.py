@@ -47,7 +47,8 @@ def platform_compile_args():
     # If flags are specified as a global env var use them,
     # this happens during conda build,
     # and is needed to override build configurations on osx
-    if flags := os.environ.get("CXXFLAGS", "").split():
+    flags = os.environ.get("CXXFLAGS", "").split()
+    if flags:
         return flags
 
     # Otherwise default to a multi-arch build
