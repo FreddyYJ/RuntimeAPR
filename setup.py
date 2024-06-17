@@ -1,3 +1,4 @@
+import subprocess
 import setuptools
 import sys
 import os
@@ -9,7 +10,7 @@ def get_version():
     return v
 
 VERSION = get_version()
-REPO_URL = "https://github.com/plasma-umass/slipcover"
+REPO_URL = "https://github.com/FreddyYJ/RuntimeAPR" # "https://github.com/plasma-umass/slipcover"
 
 def get_description():
 #    from pathlib import Path
@@ -23,6 +24,14 @@ def get_description():
     text = re.sub(r'(\[.*?\]\()((?!https?://))', sub, text)
 
     return text
+
+# Installing the Duet framework if not present and update path variables eitherway
+path_to_duet = '/'.join(__file__.split('/')[:-1]) + '/src/runtimeapr/concolic/restore_str/duet/'
+subprocess.run([path_to_duet + "build"], shell=True)
+if not os.path.exists(path_to_duet + 'main.native'):
+    if subprocess.run(["make", "--directory", path_to_duet]).returncode:
+        print("[Error] Unable to install the Duet Framework. Try doing it manually before retrying.")
+        exit(127)
 
 # If we're testing packaging, build using a ".devN" suffix in the version number,
 # so that we can upload new files (as testpypi/pypi don't allow re-uploading files with
@@ -68,13 +77,13 @@ def limited_api_args():
 setuptools.setup(
     name="runtimeapr",
     version=VERSION + dev_build,
-    description="Near Zero-Overhead Python Code Coverage",
-    keywords="coverage testing",
+    description="Automated Program Repair at Runtime",
+    keywords="repair runtime",
     long_description=get_description(),
     long_description_content_type="text/markdown",
-    url="https://github.com/plasma-umass/slipcover",
-    author="Juan Altmayer Pizzorno, Emery Berger",
-    author_email="juan@altmayer.com, emery@cs.umass.edu",
+    url="https://github.com/FreddyYJ/RuntimeAPR", # "https://github.com/plasma-umass/slipcover",
+    author="YougJae Kim",
+    author_email="",
     license="Apache License 2.0",
     packages=['runtimeapr','runtimeapr.concolic','runtimeapr.loop'],
     package_dir={'': 'src'},

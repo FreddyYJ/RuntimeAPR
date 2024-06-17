@@ -5,7 +5,7 @@ import os
 import pickle
 import sys
 from types import FrameType, FunctionType, MethodType
-from typing import Any, Dict, List, Set, Tuple, Union
+from typing import Any, Dict, List, Optional, Set, Tuple, Union
 import ast
 import traceback
 from time import sleep
@@ -15,6 +15,7 @@ from bytecode import Bytecode
 import gc
 from openai import OpenAI
 from bytecode import Bytecode,dump_bytecode
+from runtimeapr.concolic.restore_str.util_ast.runner import FunctionGenerator
 
 from ..concolic.fuzzing import Fuzzer
 from .funcast import FunctionFinderVisitor
@@ -69,7 +70,7 @@ class RepairloopRunner:
         self.is_append=False
 
         # OpenAI stuffs
-        self.openai_client=OpenAI()
+        ### TODO: remove comment!!!!!! self.openai_client=OpenAI()
 
     def run_concolic(self,before_values:Dict[str,Any]) -> Tuple[List[z3.BoolRef],Dict[str,object],Dict[str,object]]:
         """
@@ -341,13 +342,13 @@ class RepairloopRunner:
             except Exception as e:
                 print('Exception not fixed or new exception raised, retry...')
     
-    def loop(self,from_error:Exception=None):
+    def loop(self,from_error:Optional[Exception]=None):
         """
         Run the function and compare variables with buggy
         """
         is_same=False
         self.trial=0
-        MAX_TRIAL=10
+        MAX_TRIALS=10
         print(f'Function throws an exception: {from_error}, move to repair loop.')
 
         # Run fuzzer to reproduce exception
@@ -389,15 +390,17 @@ class RepairloopRunner:
         #     },file,indent=2)
 
         # Mutating buggy inputs to find exact states
-        reproducer=StateReproducer(self.fn,self.target_func.args,self.bug_info.buggy_args_values,self.bug_info.buggy_global_values,
+        reproducer=StateReproducer(fuzzer, self.fn,self.target_func.args,self.bug_info.buggy_args_values,self.bug_info.buggy_global_values,
                                    buggy_args,buggy_kwargs,buggy_globals,self.defines)
         func_entry=reproducer.reproduce()
 
         # Repair
+        print("\033[94mFunction entry found:\033[0m", func_entry)
+        exit(0)
         return self.repair(func_entry,from_error)
 
         while not is_same:
-            if self.trial>MAX_TRIAL:
+            if self.trial>MAX_TRIALS:
                 print("Max trial 100 reached. Stop.")
                 break
 
@@ -486,7 +489,7 @@ class RepairloopRunner:
         save_file.write('\n')
         save_file.close()
         if is_same:
-            print(f'Same result!')
+            print(f'Same result in same var!')
         else:
             print(f'Different result!')
 

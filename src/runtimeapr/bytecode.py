@@ -2,7 +2,7 @@ from __future__ import annotations
 import sys
 import dis
 import types
-from typing import List
+from typing import List, Iterator, Tuple
 
 PYTHON_VERSION = sys.version_info[0:2]
 
@@ -67,7 +67,7 @@ def opcode_arg(opcode: int, arg: int, min_ext : int = 0) -> List[int]:
     return bytecode
 
 
-def unpack_opargs(code: bytes) -> List[(int, int, int, int)]:
+def unpack_opargs(code: bytes) -> Iterator[Tuple[int, int, int, int]]:
     """Unpacks opcodes and their arguments, returning:
 
     - the beginning offset, including that of the first EXTENDED_ARG, if any
