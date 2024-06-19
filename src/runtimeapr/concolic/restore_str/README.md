@@ -19,4 +19,4 @@ The method returns None if the synthesizer was not able to complete its task.
 ### Restrictions
 - No escaped characters
 - No quote
-- It is expected that you don't use the semicolon `;`. It is utilized in the program and is therefore removed if present in a test. And for my sanity, please no quotes `"` either.
+- It is expected that you don't use the semicolon `;`. It is utilized in the program and is therefore removed if present in a test.

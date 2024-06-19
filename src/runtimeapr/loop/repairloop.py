@@ -15,7 +15,6 @@ from bytecode import Bytecode
 import gc
 from openai import OpenAI
 from bytecode import Bytecode,dump_bytecode
-from runtimeapr.concolic.restore_str.util_ast.runner import FunctionGenerator
 
 from ..concolic.fuzzing import Fuzzer
 from .funcast import FunctionFinderVisitor
@@ -70,7 +69,8 @@ class RepairloopRunner:
         self.is_append=False
 
         # OpenAI stuffs
-        ### TODO: remove comment!!!!!! self.openai_client=OpenAI()
+        ### TODO: remove comment!!!!!! 
+        self.openai_client=OpenAI()
 
     def run_concolic(self,before_values:Dict[str,Any]) -> Tuple[List[z3.BoolRef],Dict[str,object],Dict[str,object]]:
         """
@@ -396,7 +396,6 @@ class RepairloopRunner:
 
         # Repair
         print("\033[94mFunction entry found:\033[0m", func_entry)
-        exit(0)
         return self.repair(func_entry,from_error)
 
         while not is_same:

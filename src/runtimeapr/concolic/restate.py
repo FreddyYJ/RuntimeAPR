@@ -7,7 +7,7 @@ import numpy as np
 
 from sympy import Q
 
-from runtimeapr.concolic.restore_str.util_ast.runner import FunctionGenerator
+from runtimeapr.concolic import FunctionGenerator
 from runtimeapr.concolic.fuzzing import Fuzzer
 
 from .defusegraph import DefUseGraph
