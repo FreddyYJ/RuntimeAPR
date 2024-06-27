@@ -3,11 +3,9 @@ from enum import Enum
 from functools import partial
 import random
 import struct
-import numpy as np
 
-from sympy import Q
 
-from runtimeapr.concolic.restore_str.util_ast.runner import FunctionGenerator
+from runtimeapr.concolic import FunctionGenerator
 from runtimeapr.concolic.fuzzing import Fuzzer
 
 from .defusegraph import DefUseGraph
@@ -22,7 +20,7 @@ from ..loop.repairutils import (
     prune_default_local_var,
 )
 
-from typing import Dict, List, Optional, Set, Tuple
+from typing import Dict, List, Set, Tuple
 from types import FunctionType, ModuleType
 import inspect
 from copy import deepcopy, copy
@@ -54,9 +52,9 @@ class StateReproducer:
         self.kwargs = kwargs
         self.global_vars = prune_default_global_var(self.fn, global_vars)
         self.def_use_chains = def_use_chain
-        self.examples = []
+        self.examples: List[Tuple[Dict[str, object], Dict[str, object], Dict[str, object]]] = []
         """
-            [ (globals, local_diffs, global_diffs) ]
+            [ (previous_globals, after_locals, after_globals) ]
         """
 
         self.diffs: List[tuple] = []
@@ -110,8 +108,8 @@ class StateReproducer:
 
     def is_vars_same(self, local_vars: Dict[str, object], global_vars: Dict[str, object], verbose=True):
         is_same = True
-        local_diffs: Dict[str, Tuple[object]] = dict()
-        global_diffs: Dict[str, Tuple[object]] = dict()
+        local_diffs: Dict[str, Tuple[object, object]] = dict()
+        global_diffs: Dict[str, Tuple[object, object]] = dict()
 
         if verbose:
             print('Compare local variables...')
@@ -172,7 +170,7 @@ class StateReproducer:
 
         return local_diffs, global_diffs
 
-    def find_candidate_inputs(self, local_vars: Dict[str, object], global_vars: Dict[str, object], verbose=True):
+    def find_candidate_inputs(self, local_vars: Dict[str, Tuple[object, object]], global_vars: Dict[str, Tuple[object, object]], verbose=True):
         pos_args = []
         for arg in self.args_names.posonlyargs:
             pos_args.append(arg.arg)
@@ -220,9 +218,6 @@ class StateReproducer:
                     # TODO new global var found
                 else:
                     if verbose:
-                        print(f"{name}")
-                        print(f'{base_obj}')
-                        print(f"{obj}")
                         print(f'Mutate global var {name}: {base_obj} -> {obj}')
                     # Find the corresponding argument, kwargs, globals
                     cand_args = set(pos_args)
@@ -318,30 +313,30 @@ class StateReproducer:
 
             elif isinstance(obj, bytes):
                 # For bytes object, erase/insert/mutate a random character
-                new_str = obj
-                MAX_STR_LEN = len(new_str)
+                new_byte = obj
+                MAX_STR_LEN = len(new_byte)
 
                 # Erase random characters
-                while len(new_str) != 0 and random.randint(0, 1) == 1:
-                    index = random.randint(0, len(new_str) - 1)
-                    new_str = new_str[:index] + new_str[index + 1 :]
+                while len(new_byte) != 0 and random.randint(0, 1) == 1:
+                    index = random.randint(0, len(new_byte) - 1)
+                    new_byte = new_byte[:index] + new_byte[index + 1 :]
 
                 # Insert random characters
-                while len(new_str) <= MAX_STR_LEN and random.randint(0, 1) == 1:
-                    index = random.randint(0, len(new_str))
-                    new_str = new_str[:index] + bytes(random.randint(0, 255)) + new_str[index:]
+                while len(new_byte) <= MAX_STR_LEN and random.randint(0, 1) == 1:
+                    index = random.randint(0, len(new_byte))
+                    new_byte = new_byte[:index] + bytes(random.randint(0, 255)) + new_byte[index:]
 
-                if new_str != obj:
-                    mutated_values[name] = new_str
-                    return new_str
+                if new_byte != obj:
+                    mutated_values[name] = new_byte
+                    return new_byte
 
-                if len(new_str) == 0:
+                if len(new_byte) == 0:
                     mutated_values[name] = bytes(random.randint(0, 255))
                     return mutated_values[name]
                 else:
                     # Still the same string, mutate a random character
-                    index = random.randint(0, len(new_str) - 1)
-                    mutated_values[name] = new_str[:index] + bytes(random.randint(0, 255)) + new_str[index + 1 :]
+                    index = random.randint(0, len(new_byte) - 1)
+                    mutated_values[name] = new_byte[:index] + bytes(random.randint(0, 255)) + new_byte[index + 1 :]
                     return mutated_values[name]
 
             elif isinstance(obj, float):
@@ -460,7 +455,7 @@ class StateReproducer:
 
                 if isinstance(y_orig_value, str):
                     # Convert string to unicode number
-                    unicode_values = []
+                    unicode_values: List[int] = []
                     unicode_values.extend(ord(c) for c in y_orig_value)
                     y_orig_value = unicode_values
                 if is_mutable_obj(y_orig_value):
@@ -795,12 +790,12 @@ class StateReproducer:
         print(f'States collected!')
         return 1
 
-    def reproduce_int(self):
+    def reproduce_int(self)->Dict[str, object]:
         buggy_vars = deepcopy(self.buggy_local_vars)
         buggy_vars.update(self.buggy_global_vars)
         return self.torch_predict(buggy_vars)
 
-    def reproduce(self):
+    def reproduce(self)->None:
         if self.generate_args():  # just because python tries to optimize it by running the latest before
 
             MAX_TRIALS = 10
