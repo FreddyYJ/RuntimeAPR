@@ -28,6 +28,7 @@ def get_description():
 # Installing the Duet framework if not present and update path variables eitherway
 path_to_duet = '/'.join(__file__.split('/')[:-1]) + '/src/runtimeapr/concolic/restore_str/duet/'
 subprocess.run([path_to_duet + "build"], shell=True)
+subprocess.check_output(["opam", "env"])
 if not os.path.exists(path_to_duet + 'main.native'):
     if subprocess.run(["make", "--directory", path_to_duet]).returncode:
         print("[Error] Unable to install the Duet Framework. Try doing it manually before retrying.")
