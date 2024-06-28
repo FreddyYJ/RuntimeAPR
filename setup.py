@@ -1,5 +1,5 @@
 import subprocess
-import setuptools
+import setuptools # type: ignore
 import sys
 import os
 from pathlib import Path
@@ -26,7 +26,7 @@ def get_description():
     return text
 
 # Installing the Duet framework if not present and update path variables eitherway
-path_to_duet = '/'.join(__file__.split('/')[:-1]) + '/src/runtimeapr/concolic/restore_str/duet/'
+path_to_duet = '/'.join(__file__.split('/')[:-1]) + '/src/runtimeapr/concolic/restoreStr/duet/'
 subprocess.run([path_to_duet + "build"], shell=True)
 subprocess.check_output(["opam", "env"])
 if not os.path.exists(path_to_duet + 'main.native'):

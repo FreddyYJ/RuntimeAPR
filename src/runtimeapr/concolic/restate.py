@@ -24,8 +24,8 @@ from typing import Dict, List, Set, Tuple
 from types import FunctionType, ModuleType
 import inspect
 from copy import deepcopy, copy
-import torch
-import torch.nn as nn
+import torch # type: ignore
+import torch.nn as nn # type: ignore
 
 
 class StateReproducer:
