@@ -1,5 +1,7 @@
 # Duet
 
+This is a fork from the Duet synthesizer. The original repo is available [here](https://github.com/wslee/duet).
+
 Duet is an inductive program synthesizer that combines top-down deduction and bottom-up enumeration. 
 Because it targets inductive synthesis, which tries to find a program from input-output examples, 
 we support SyGuS instances with input-output examples provided upfront and instances with a functional 
