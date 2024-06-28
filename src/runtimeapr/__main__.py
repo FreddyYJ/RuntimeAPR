@@ -51,6 +51,7 @@ g = ap.add_mutually_exclusive_group(required=True)
 g.add_argument('-m', dest='module', nargs=1, help="run given module as __main__")
 g.add_argument('script', nargs='?', type=Path, help="the script to run")
 ap.add_argument('script_or_module_args', nargs=argparse.REMAINDER)
+ap.add_argument('--ignore-repair', action='store_true', help="only parse the input file and ignore any possible reparation")
 
 if '-m' in sys.argv: # work around exclusive group not handled properly
     minus_m = sys.argv.index('-m')
@@ -143,7 +144,8 @@ if args.script:
         with sc.ImportManager(sci, file_matcher):
             exec(code, script_globals)
     else:
-        code = sci.insert_try_except(code)
+        if not args.ignore_repair:
+            code = sci.insert_try_except(code)
         with RuntimeAPRImportManager(sci, file_matcher):
             exec(code, script_globals)
 
