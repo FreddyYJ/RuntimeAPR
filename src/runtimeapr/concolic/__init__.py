@@ -6,4 +6,4 @@ from .model import CFG,Block
 from .condtree import ConditionTree,ConditionNode
 from .defusegraph import DefUseGraph
 from .fuzzing import Fuzzer
-from .restore_str import FunctionGenerator
+from .restoreStr import FunctionGenerator

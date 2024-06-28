@@ -3,9 +3,10 @@ OCAML_VERSION=4.08.0
 if ! command -v opam &> /dev/null
 then
 	echo "OPAM could not be found. Installing OPAM..."
-	sh <(curl -sL https://raw.githubusercontent.com/ocaml/opam/master/shell/install.sh)
-	opam init --auto-setup --disable-sandboxing --yes --compiler=$OCAML_VERSION && opam clean
+	yes "\n" | sh <(curl -sL https://raw.githubusercontent.com/ocaml/opam/master/shell/install.sh)
+	yes | opam init --auto-setup --disable-sandboxing --yes --compiler=$OCAML_VERSION && opam clean
 fi
+apt install libz3-dev
 opam switch create $OCAML_VERSION
 eval `opam config env`
 opam install --yes containers containers-data z3.4.8.1 core.v0.13.0 batteries.3.0.0 ocamlgraph.1.8.8 

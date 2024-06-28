@@ -62,7 +62,7 @@ class FunctionGenerator:
         [ (outputs, buggy_variable_input) ]
         """
 
-        self.path_to_duet = '/'.join(__file__.split('/')[:-1]) + '/../duet/'
+        self.path_to_duet = "/" + os.path.join(*__file__.split('/')[:-2], 'duet/')
         self.additional_examples: List[Tuple[List[Union[str, int, bool]], Union[str, int, bool]]] = []
         self.timeout = 15
         self.max_examples = 100
@@ -107,6 +107,7 @@ class FunctionGenerator:
         Writes the function specification in @file.
         """
         example_sample = self.example_subset()
+        print("trying to open", file)
         with open(file, 'w') as fd:
             normalized_specification = lisp_from_examples((self.inTypes, "String", example_sample))
             print(normalized_specification, file=fd)
