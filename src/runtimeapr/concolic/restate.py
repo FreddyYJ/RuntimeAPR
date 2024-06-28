@@ -218,7 +218,10 @@ class StateReproducer:
                     # TODO new global var found
                 else:
                     if verbose:
-                        print(f'Mutate global var {name}: {base_obj} -> {obj}')
+                        try: # obj can be some non-utf-8-representable characters
+                            print(f'Mutate global var {name}: {base_obj} -> {obj}')
+                        except:
+                            pass
                     # Find the corresponding argument, kwargs, globals
                     cand_args = set(pos_args)
                     cand_kwargs = set(kw_arg)
@@ -395,11 +398,25 @@ class StateReproducer:
         input_keys = []
         output_keys = []
 
+        def is_mutable_obj(obj: object):
+            return (
+                isinstance(obj, int)
+                or isinstance(obj, float)
+                #or isinstance(obj, str)
+                or isinstance(obj, bytes)
+                or isinstance(obj, Enum)
+                #or isinstance(obj, list)
+                #or isinstance(obj, set)
+                #or isinstance(obj, dict)
+                #or isinstance(obj, tuple)
+                #or hasattr(obj, '__dict__')
+            )
+
         # Store args and vars keys first for the order and padding
         for diff in self.diffs[1:]:
             args, kwargs, globals, mutated_objects, local_vars, global_vars = diff
             for name, obj in mutated_objects.items():
-                if name not in input_keys:
+                if name not in input_keys and is_mutable_obj(obj):
                     input_keys.append(name)
             for name, obj in local_vars.items():
                 if name not in output_keys:
@@ -417,20 +434,6 @@ class StateReproducer:
                         if target_name.startswith(cur_name + '.' + name):
                             return get_original_value(field, cur_name + '.' + name, target_name)
             return None
-
-        def is_mutable_obj(obj: object):
-            return (
-                isinstance(obj, int)
-                or isinstance(obj, float)
-                or isinstance(obj, str)
-                or isinstance(obj, bytes)
-                or isinstance(obj, Enum)
-                or isinstance(obj, list)
-                or isinstance(obj, set)
-                or isinstance(obj, dict)
-                or isinstance(obj, tuple)
-                or hasattr(obj, '__dict__')
-            )
 
         # Create x and y
         # Now we assume different state is only one``
@@ -534,125 +537,124 @@ class StateReproducer:
         optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
 
         print('Training the model...')
-        while True:
-            model.train()
-            for t in range(epochs):
-                for batch, (x_v, y_v) in enumerate(zip(x_tensor, y_tensor)):
-                    output = model(x_v)
-                    l = loss(output, y_v)
-                    optimizer.zero_grad()
-                    l.backward()
-                    optimizer.step()
+        model.train()
+        for t in range(epochs):
+            for batch, (x_v, y_v) in enumerate(zip(x_tensor, y_tensor)):
+                output = model(x_v)
+                l = loss(output, y_v)
+                optimizer.zero_grad()
+                l.backward()
+                optimizer.step()
 
-                if t % 50 == 49:
-                    print(f'Epoch {t+1} Batch {batch+1} Loss {l.item()}')
+            if t % 50 == 49:
+                print(f'Epoch {t+1} Batch {batch+1} Loss {l.item()}')
 
-            # Predict target args, kwargs, globals
-            print('Predicting target args, kwargs, globals...')
-            model.eval()
-            with torch.no_grad():
-                target_x_tensor = torch.tensor(t_x, dtype=torch.float64, device=self.device)
-                target_y_tensor: torch.Tensor = model(target_x_tensor)
-                target_y: list = target_y_tensor.cpu().numpy().tolist()
+        # Predict target args, kwargs, globals
+        print('Predicting target args, kwargs, globals...')
+        model.eval()
+        with torch.no_grad():
+            target_x_tensor = torch.tensor(t_x, dtype=torch.float64, device=self.device)
+            target_y_tensor: torch.Tensor = model(target_x_tensor)
+            target_y: list = target_y_tensor.cpu().numpy().tolist()
 
-            for i, y_value in enumerate(target_y.copy()):
-                if isinstance(y[0][i], int):
-                    target_y[i] = int(y_value)
+        for i, y_value in enumerate(target_y.copy()):
+            if isinstance(y[0][i], int):
+                target_y[i] = round(y_value)
 
-            predicted: Dict[str, object] = dict()
-            for key, _y in zip(input_keys, target_y):
-                predicted[key] = _y
+        predicted: Dict[str, object] = dict()
+        for key, _y in zip(input_keys, target_y):
+            predicted[key] = _y
 
-            print(f'Predicted: {predicted} from {t_x}')
+        print(f'Predicted: {predicted} from {t_x}')
 
-            # Try with predicted y
-            new_args, new_kwargs, new_globals = deepcopy([self.args, self.kwargs, self.global_vars])
-            for name, obj in predicted.items():
-                if name in self.arg_names:
-                    index = self.arg_names.index(name)
-                    new_args[index] = obj
-                elif name in new_kwargs:
-                    new_kwargs[name] = obj
-                elif name in new_globals:
-                    new_globals[name] = obj
-            reproduced_local_vars, reproduced_global_vars = self.run(new_args, new_kwargs, new_globals)
-            if reproduced_local_vars is None:
-                # the output didn't resulted in an error
-                ### TODO: do something usefull
-                continue
-            local_diffs, global_diffs = self.is_vars_same(
-                prune_default_local_var(self.fn, reproduced_local_vars),
-                prune_default_global_var(self.fn, reproduced_global_vars),
-            )
-            if len(local_diffs) == 0 and len(global_diffs) == 0:
-                print(f'States reproduced by model')
-                return predicted
-            else:
-                # If different states, train with new state
-                print('Different states, train again...')
-                # x is current states
-                x_values = []
-                for name in output_keys:
-                    if name in reproduced_local_vars:
-                        x_value = reproduced_local_vars[name]
-                    elif name in reproduced_global_vars:
-                        x_value = reproduced_global_vars[name]
-                    # If the variable is not exist, use buggy one
-                    elif name in self.buggy_local_vars:
-                        x_value = self.buggy_local_vars[name]
-                    elif name in self.buggy_global_vars:
-                        x_value = self.buggy_global_vars[name]
+        return predicted
+        # Try with predicted y
+        new_args, new_kwargs, new_globals = deepcopy([self.args, self.kwargs, self.global_vars])
+        for name, obj in predicted.items():
+            if name in self.arg_names:
+                index = self.arg_names.index(name)
+                new_args[index] = obj
+            elif name in new_kwargs:
+                new_kwargs[name] = obj
+            elif name in new_globals:
+                new_globals[name] = obj
+        reproduced_local_vars, reproduced_global_vars = self.run(new_args, new_kwargs, new_globals)
+        if reproduced_local_vars is None:
+            pass
+        local_diffs, global_diffs = self.is_vars_same(
+            prune_default_local_var(self.fn, reproduced_local_vars),
+            prune_default_global_var(self.fn, reproduced_global_vars),
+        )
+        if len(local_diffs) == 0 and len(global_diffs) == 0:
+            print(f'States reproduced by model')
+            return predicted
+        else:
+            # If different states, train with new state
+            print('Different states, train again...')
+            # x is current states
+            x_values = []
+            for name in output_keys:
+                if name in reproduced_local_vars:
+                    x_value = reproduced_local_vars[name]
+                elif name in reproduced_global_vars:
+                    x_value = reproduced_global_vars[name]
+                # If the variable is not exist, use buggy one
+                elif name in self.buggy_local_vars:
+                    x_value = self.buggy_local_vars[name]
+                elif name in self.buggy_global_vars:
+                    x_value = self.buggy_global_vars[name]
 
-                    if is_mutable_obj(x_value):
-                        if isinstance(x_value, str):
-                            # Convert string to unicode number
-                            unicode_values = []
-                            unicode_values.extend(ord(c) for c in x_value)
-                            x_value = unicode_values
-                        x_values.append(x_value)
-
-                y_values = []
-                # y is args, kwargs, globals that we want to predict
-                for name in input_keys:
-                    if name in predicted:
-                        y_orig_value = predicted[name]
-                    else:
-                        root_name = name.split('.')[0]
-                        if root_name in kwargs.keys():
-                            y_orig_value = get_original_value(kwargs[root_name], root_name, name)
-                        elif root_name in globals.keys():
-                            y_orig_value = get_original_value(globals[root_name], root_name, name)
-                        else:
-                            # args
-                            y_orig_value = get_original_value(args[self.arg_names.index(root_name)], root_name, name)
-
-                    if isinstance(y_orig_value, str):
+                if is_mutable_obj(x_value):
+                    if isinstance(x_value, str):
                         # Convert string to unicode number
                         unicode_values = []
-                        unicode_values.extend(ord(c) for c in y_orig_value)
-                        y_orig_value = unicode_values
-                    if is_mutable_obj(y_orig_value):
-                        y_values.append(y_orig_value)
-                        y_types.append(type(y_orig_value))
+                        unicode_values.extend(ord(c) for c in x_value)
+                        x_value = unicode_values
+                    x_values.append(x_value)
 
-                new_x = torch.tensor(x_values, dtype=torch.float64, device=self.device)
-                new_y = torch.tensor(y_values, dtype=torch.float64, device=self.device)
-                model.train()
-                for t in range(epochs):
-                    output = model(new_x)
-                    l = loss(output, new_y)
-                    optimizer.zero_grad()
-                    l.backward()
-                    optimizer.step()
+            y_values = []
+            # y is args, kwargs, globals that we want to predict
+            for name in input_keys:
+                if name in predicted:
+                    y_orig_value = predicted[name]
+                else:
+                    root_name = name.split('.')[0]
+                    if root_name in kwargs.keys():
+                        y_orig_value = get_original_value(kwargs[root_name], root_name, name)
+                    elif root_name in globals.keys():
+                        y_orig_value = get_original_value(globals[root_name], root_name, name)
+                    else:
+                        # args
+                        y_orig_value = get_original_value(args[self.arg_names.index(root_name)], root_name, name)
 
-                    if t % 50 == 49:
-                        print(f'Epoch {t+1} Loss {l.item()}')
+                if isinstance(y_orig_value, str):
+                    # Convert string to unicode number
+                    unicode_values = []
+                    unicode_values.extend(ord(c) for c in y_orig_value)
+                    y_orig_value = unicode_values
+                if is_mutable_obj(y_orig_value):
+                    y_values.append(y_orig_value)
+                    y_types.append(type(y_orig_value))
+
+            new_x = torch.tensor(x_values, dtype=torch.float64, device=self.device)
+            new_y = torch.tensor(y_values, dtype=torch.float64, device=self.device)
+            model.train()
+            for t in range(epochs):
+                output = model(new_x)
+                l = loss(output, new_y)
+                optimizer.zero_grad()
+                l.backward()
+                optimizer.step()
+
+                if t % 50 == 49:
+                    print(f'Epoch {t+1} Loss {l.item()}')
 
     def generate_args(self):
         MAX_TRIALS = 300
         new_args, new_kwargs, new_globals = deepcopy([self.args, self.kwargs, self.global_vars])
         new_args_only, new_kwargs_only, new_globals_only = dict(), dict(), dict()
         mutated_objects = dict()
+        examples = []
 
         with open('states.log', 'w') as f:
             for trial in range(1, MAX_TRIALS):
@@ -718,7 +720,7 @@ class StateReproducer:
                 cur_global_values = dict()
                 for name, local in global_diffs.items():
                     cur_global_values[name] = local[0]
-                self.examples.append(
+                examples.append(
                     (
                         prune_default_global_var(self.fn, prev_globals),
                         prune_default_local_var(self.fn, reproduced_local_vars),
@@ -788,51 +790,58 @@ class StateReproducer:
                 print('-----------------------------', file=f)
 
         print(f'States collected!')
-        return 1
+        return examples
 
-    def reproduce_int(self)->Dict[str, object]:
+    def reproduce_int(self)-> Dict[str, object]:
         buggy_vars = deepcopy(self.buggy_local_vars)
         buggy_vars.update(self.buggy_global_vars)
         return self.torch_predict(buggy_vars)
 
-    def reproduce(self)->None:
-        if self.generate_args():  # just because python tries to optimize it by running the latest before
+    def improve(self, str_states, fun_gens: Dict[str, FunctionGenerator], reproduced_int, reproduced_local_vars, reproduced_global_vars):
+        examples = self.generate_args()
+        for varname, fun in fun_gens.items():
+            fun.improve(str_states[varname], examples, reproduced_local_vars, reproduced_global_vars)
 
-            MAX_TRIALS = 10
-            fun_gens: Dict[str, FunctionGenerator] = dict()
-            str_var_names = []
-            for varname, value in self.buggy_global_vars.items():
-                if isinstance(value, str):
-                    str_var_names.append(varname)
-                    fun_gens[varname] = FunctionGenerator(
-                        varname, self.examples, self.buggy_local_vars, self.buggy_global_vars, self.fuzzer
-                    )
+        return 
 
-            new_globals = deepcopy(self.global_vars)
-            str_states = {}
+    def reproduce(self)-> Tuple[List, Dict, Dict]:
+        examples=self.generate_args()
+        MAX_TRIALS = 10
+        fun_gens: Dict[str, FunctionGenerator] = dict()
+        for varname, value in self.buggy_global_vars.items():
+            if isinstance(value, str):
+                fun_gens[varname] = FunctionGenerator(
+                    varname, examples, self.buggy_local_vars, self.buggy_global_vars
+                )
 
-            for trial in range(1, MAX_TRIALS + 1):
+        str_states = {}
 
-                for varname, fun_gen in fun_gens.items():
-                    state = fun_gen.get_expected_state(debug=True)
-                    print(state)
-                    str_states[varname] = state
-                    if state is not None:
-                        new_globals[varname] = state
-                for varname, value in self.reproduce_int().items():
+        for trial in range(1, MAX_TRIALS + 1):
+            new_args, new_kwargs, new_globals = deepcopy((self.args, self.kwargs, self.global_vars))
+            for varname, fun_gen in fun_gens.items():
+                state = fun_gen.get_expected_state(debug=True)
+                print(state)
+                str_states[varname] = state
+                if state is not None:
+                    new_globals[varname] = state
+            reproduced_int = self.reproduce_int()
+            for varname, value in reproduced_int.items():
+                if varname in self.arg_names:
+                    new_args[self.arg_names.index(varname)] = value
+                elif varname in self.kwargs:
+                    new_kwargs[varname] = value
+                else:
                     if not isinstance(value, str):
                         new_globals[varname] = value
 
-                reproduced_local_vars, reproduced_global_vars = self.run(self.args, self.kwargs, new_globals)
-
-                local_diffs, global_diffs = self.is_vars_same(
-                    prune_default_local_var(self.fn, reproduced_local_vars),
-                    prune_default_global_var(self.fn, reproduced_global_vars),
-                )
-                if len(local_diffs) == 0 and len(global_diffs) == 0:
-                    print(f'States reproduced in trial {trial}')
-                    return
-
-                for fun in fun_gens.values():
-                    fun.improve(str_states[varname], reproduced_local_vars, reproduced_global_vars)
-                self.generate_args()
+            reproduced_local_vars, reproduced_global_vars = self.run(new_args, new_kwargs, new_globals)
+            if reproduced_local_vars is None:
+                self.improve(str_states, fun_gens, reproduced_int, None, None)
+            local_diffs, global_diffs = self.is_vars_same(
+                prune_default_local_var(self.fn, reproduced_local_vars),
+                prune_default_global_var(self.fn, reproduced_global_vars),
+            )
+            if len(local_diffs) == 0 and len(global_diffs) == 0:
+                print(f'States reproduced after {trial} trial(s)')
+                return new_args, new_kwargs, new_globals
+            self.improve(str_states, fun_gens, reproduced_int, reproduced_local_vars, reproduced_global_vars)

@@ -3,7 +3,6 @@ import subprocess
 from .lisp_generator import lisp_from_examples
 from .lisp_interpret import function_from_string
 from .ast_types import get_type
-from ...fuzzing import Fuzzer
 import os
 from typing import Optional, Tuple, Union, Dict, List
 import random as rd
@@ -21,7 +20,6 @@ class FunctionGenerator:
         examples: List[Tuple[Dict[str, object], Dict[str, object], Dict[str, object]]],
         buggy_locals,
         buggy_globals,
-        fuzzer: Fuzzer,
         # args,
         # kwargs,
         # global_vars,
@@ -29,35 +27,12 @@ class FunctionGenerator:
         # global_diffs,
         # examples: List[Tuple[List[Union[str, int, bool]], Union[str, int, bool]]],
     ):
-        self.fuzzer = fuzzer
         self.buggy_var = buggy_var
         self.buggy_locals = buggy_locals
         self.buggy_globals = buggy_globals
 
         # the order of the dict keys should not be changed as the dict will not be modified
-        self.examples: List[Tuple[Dict[Union[str, int, bool], Union[str, int, bool]], Union[str, int, bool]]] = list(
-            map(
-                lambda ex: (
-                    {**ex[2], **ex[1]},
-                    ex[0][buggy_var],
-                ),
-                examples,
-            )
-        )
-        self.examples = list(
-            map(
-                lambda ex: (dict(filter(lambda x: type(x[1]) in (int, str, bool), ex[0].items())), ex[1]), self.examples
-            )
-        )
-        # Duet cannot read it so ignore escaped caracters
-        pattern = r'\\[ntrabfuvx]|[\[\(\)\]\'"]'
-        self.examples = list(
-            filter(
-                lambda ex: not any(re.search(pattern, repr(k)[1:-1]) for k in ex[0].values() if type(k) == str),
-                self.examples,
-            )
-        )
-        self.arg_order = list(self.examples[0][0].keys())
+        self.examples = self.format_examples(examples)
         """
         [ (outputs, buggy_variable_input) ]
         """
@@ -67,7 +42,35 @@ class FunctionGenerator:
         self.timeout = 15
         self.max_examples = 100
         self.inTypes = list(map(get_type, self.examples[0][0].values()))
+        self.last_function = None # If a function was found before, try it before synthesizing again
+        self.last_output = None
 
+
+    def format_examples(self, examples):
+        additional_examples: List[Tuple[Dict[Union[str, int, bool], Union[str, int, bool]], Union[str, int, bool]]] = list(
+            map(
+                lambda ex: (
+                    {**ex[2], **ex[1]},
+                    ex[0][self.buggy_var],
+                ),
+                examples,
+            )
+        )
+        additional_examples = list(
+            map(
+                lambda ex: (dict(filter(lambda x: type(x[1]) in (int, str, bool), ex[0].items())), ex[1]), additional_examples
+            )
+        )
+        # Duet cannot read it so ignore escaped caracters
+        pattern = r'\\[ntrabfuvx]|[\[\(\)\]\'"]'
+        additional_examples = list(
+            filter(
+                lambda ex: not any(re.search(pattern, repr(k)[1:-1]) for k in ex[0].values() if type(k) == str),
+                additional_examples,
+            )
+        )
+        return additional_examples
+    
     def prune_heuristic(self):
         return rd.sample(self.examples, self.max_examples)
         ### TODO: get len global and local diff
@@ -79,17 +82,20 @@ class FunctionGenerator:
 
     def example_subset(self):
         """
-        extact a subset of possibly interesting examples to synthesize a function
+        extract a subset of possibly interesting examples to synthesize a function
         """
         return self.prune_heuristic() + self.additional_examples
+    
+    def improve(self, new_examples, reproduced_local_vars, reproduced_global_vars):
+        additional_examples = self.format_examples(new_examples)
+        self.examples += additional_examples
 
-    def improve(self, bad_in_state=None, good_in_state=None, good_out_state=None):
-        if bad_in_state is None:
+        if reproduced_local_vars is None:
             self.timeout += 1
         else:
             # TODO: someting along the line of self.additional_examples.append((good_in_state, good_out_state))
             ...
-        if self.max_examples > self.fuzzer.examples:
+        if self.max_examples > len(self.examples):
             # TODO: Do more fuzzing I guess and remember examples
             ...
         if self.max_examples > 10000:
@@ -147,6 +153,15 @@ class FunctionGenerator:
         if debug:
             print('Searching an initial state')
         filename = self.get_file_name()
+        if self.last_function is not None:
+            for args, result in self.examples:
+                old_out = function(*(args[varname] for varname in self.examples[0][0]))
+                if old_out != result:
+                    break
+            else:
+                print("The last function still works. Using again the same expected input:", self.last_output)
+                return self.last_output
+        
         self.generate_specification(filename)
         if debug:
             print('The specification has been written at', filename)
@@ -161,7 +176,7 @@ class FunctionGenerator:
             return None
         function = function_from_string(function_string)
         args = {}
-        for varname in self.arg_order:
+        for varname in self.examples[0][0]:
             if varname in self.buggy_locals:
                 if debug:
                     print("local:", varname, self.buggy_locals[varname])
@@ -173,6 +188,8 @@ class FunctionGenerator:
 
         out = function(*(args[varname] for varname in self.examples[0][0]))
 
+        self.last_function = function
+        self.last_output = out
         if debug:
             print('The function has been parsed:\n', function)
             print('Expected faulty input:', out)
