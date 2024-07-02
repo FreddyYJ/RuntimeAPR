@@ -809,7 +809,7 @@ class StateReproducer:
         examples=self.generate_args()
         if self.solution is not None:
             args = [self.solution[0][varname] for varname in self.arg_names]
-            kwargs = dict(filter(lambda x: not x[0] in self.arg_names, self.solution[0]))
+            kwargs = dict(filter(lambda x: not x[0] in self.arg_names, self.solution[0].items()))
             return args, kwargs, self.solution[1]
         MAX_TRIALS = 10
         fun_gens: Dict[str, FunctionGenerator] = dict()
