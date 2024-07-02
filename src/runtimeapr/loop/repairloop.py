@@ -69,7 +69,6 @@ class RepairloopRunner:
         self.is_append=False
 
         # OpenAI stuffs
-        ### TODO: remove comment!!!!!! 
         self.openai_client=OpenAI()
 
     def run_concolic(self,before_values:Dict[str,Any]) -> Tuple[List[z3.BoolRef],Dict[str,object],Dict[str,object]]:
@@ -390,7 +389,7 @@ class RepairloopRunner:
         #     },file,indent=2)
 
         # Mutating buggy inputs to find exact states
-        reproducer=StateReproducer(fuzzer, self.fn,self.target_func.args,self.bug_info.buggy_args_values,self.bug_info.buggy_global_values,
+        reproducer=StateReproducer(self.fn,self.target_func.args,self.bug_info.buggy_args_values,self.bug_info.buggy_global_values,
                                    buggy_args,buggy_kwargs,buggy_globals,self.defines)
         func_entry=reproducer.reproduce()
 

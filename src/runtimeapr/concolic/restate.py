@@ -31,7 +31,6 @@ import torch.nn as nn # type: ignore
 class StateReproducer:
     def __init__(
         self,
-        fuzzer: Fuzzer,
         fn: FunctionType,
         args_names: ast.arguments,
         buggy_local_vars: Dict[str, object],
@@ -42,7 +41,6 @@ class StateReproducer:
         global_vars: Dict[str, object],
         def_use_chain: Dict[str, List[str]],
     ):
-        self.fuzzer = fuzzer
         self.fn = fn
         self.args_names = args_names
         self.buggy_local_vars = prune_default_local_var(self.fn, buggy_local_vars)
@@ -52,6 +50,7 @@ class StateReproducer:
         self.kwargs = kwargs
         self.global_vars = prune_default_global_var(self.fn, global_vars)
         self.def_use_chains = def_use_chain
+        self.solution = None
         self.examples: List[Tuple[Dict[str, object], Dict[str, object], Dict[str, object]]] = []
         """
             [ (previous_globals, after_locals, after_globals) ]
@@ -513,6 +512,7 @@ class StateReproducer:
         # Create model
         y_tensor = torch.tensor(y, dtype=torch.float64, device=self.device)
         x_tensor = torch.tensor(x, dtype=torch.float64, device=self.device)
+        print("X=",x_tensor[0], "Y=", y_tensor[0])
 
         # This is the model. We now assumed the input and output is number.
         # TODO: Find and implememnt the model for string
@@ -649,7 +649,7 @@ class StateReproducer:
                 if t % 50 == 49:
                     print(f'Epoch {t+1} Loss {l.item()}')
 
-    def generate_args(self):
+    def generate_args(self) -> List[Tuple[Dict[str,object],Dict[str,object],Dict[str,object]]]:
         MAX_TRIALS = 300
         new_args, new_kwargs, new_globals = deepcopy([self.args, self.kwargs, self.global_vars])
         new_args_only, new_kwargs_only, new_globals_only = dict(), dict(), dict()
@@ -706,13 +706,16 @@ class StateReproducer:
 
                     continue
 
+                cleaned_reproduced_local_vars = prune_default_local_var(self.fn, reproduced_local_vars)
+                cleaned_reproduced_global_vars = prune_default_global_var(self.fn, reproduced_global_vars)
                 local_diffs, global_diffs = self.is_vars_same(
-                    prune_default_local_var(self.fn, reproduced_local_vars),
-                    prune_default_global_var(self.fn, reproduced_global_vars),
+                    cleaned_reproduced_local_vars,
+                    cleaned_reproduced_global_vars,
                 )
                 if len(local_diffs) == 0 and len(global_diffs) == 0:
                     print(f'States reproduced in trial {trial}')
-                    return
+                    self.solution = (cleaned_reproduced_local_vars, cleaned_reproduced_global_vars)
+                    return examples
 
                 cur_local_values = dict()
                 for name, local in local_diffs.items():
@@ -727,8 +730,6 @@ class StateReproducer:
                         prune_default_global_var(self.fn, reproduced_global_vars),
                     )
                 )
-                # do not consider strings please
-                cur_global_values = dict(filter(lambda x: not isinstance(x[1], str), tuple(cur_global_values)))
                 self.diffs.append(
                     (
                         new_args,
@@ -806,6 +807,10 @@ class StateReproducer:
 
     def reproduce(self)-> Tuple[List, Dict, Dict]:
         examples=self.generate_args()
+        if self.solution is not None:
+            args = [self.solution[0][varname] for varname in self.arg_names]
+            kwargs = dict(filter(lambda x: not x[0] in self.arg_names, self.solution[0]))
+            return args, kwargs, self.solution[1]
         MAX_TRIALS = 10
         fun_gens: Dict[str, FunctionGenerator] = dict()
         for varname, value in self.buggy_global_vars.items():

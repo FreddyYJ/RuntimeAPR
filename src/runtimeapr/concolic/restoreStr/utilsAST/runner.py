@@ -47,7 +47,7 @@ class FunctionGenerator:
 
 
     def format_examples(self, examples):
-        additional_examples: List[Tuple[Dict[Union[str, int, bool], Union[str, int, bool]], Union[str, int, bool]]] = list(
+        additional_examples: List[Tuple[Dict[str, Union[str, int, bool]], Union[str, int, bool]]] = list(
             map(
                 lambda ex: (
                     {**ex[2], **ex[1]},
@@ -86,18 +86,19 @@ class FunctionGenerator:
         """
         return self.prune_heuristic() + self.additional_examples
     
-    def improve(self, new_examples, reproduced_local_vars, reproduced_global_vars):
+    def improve(self, output, new_examples, reproduced_local_vars, reproduced_global_vars):
         additional_examples = self.format_examples(new_examples)
         self.examples += additional_examples
 
-        if reproduced_local_vars is None:
-            self.timeout += 1
-        else:
-            # TODO: someting along the line of self.additional_examples.append((good_in_state, good_out_state))
-            ...
-        if self.max_examples > len(self.examples):
-            # TODO: Do more fuzzing I guess and remember examples
-            ...
+        if output is None:
+            self.timeout += 2
+        elif reproduced_local_vars is not None:
+            pattern = r'\\[ntrabfuvx]|[\[\(\)\]\'"]'
+            reproduced_global_vars = dict(filter(lambda x: type(x[1]) in (int, str, bool), reproduced_global_vars.items()))
+            reproduced_local_vars = dict(filter(lambda x: type(x[1]) in (int, str, bool), reproduced_local_vars.items()))
+            if not any(re.search(pattern, repr(k)[1:-1]) for k in reproduced_global_vars.values() if type(k) == str):
+                if not any(re.search(pattern, repr(k)[1:-1]) for k in reproduced_local_vars.values() if type(k) == str):
+                    self.additional_examples.append(({**reproduced_global_vars, **reproduced_local_vars}, output))
         if self.max_examples > 10000:
             self.max_examples = 100
         else:
@@ -113,6 +114,7 @@ class FunctionGenerator:
         Writes the function specification in @file.
         """
         example_sample = self.example_subset()
+        print(example_sample)
         print("trying to open", file)
         with open(file, 'w') as fd:
             normalized_specification = lisp_from_examples((self.inTypes, "String", example_sample))
@@ -138,8 +140,6 @@ class FunctionGenerator:
             if debug:
                 print("\033[91;1;4mTimeout reached\033[0m, longer duration expected")
             return None
-        except Exception as e:
-            raise e
         if "err" in result.stderr:
             print("\033[91mAn unexpected error occured:\033[0m", result.stderr)
             exit(3)
@@ -155,7 +155,7 @@ class FunctionGenerator:
         filename = self.get_file_name()
         if self.last_function is not None:
             for args, result in self.examples:
-                old_out = function(*(args[varname] for varname in self.examples[0][0]))
+                old_out = self.last_function(*(args[varname] for varname in self.examples[0][0]))
                 if old_out != result:
                     break
             else:
@@ -192,7 +192,7 @@ class FunctionGenerator:
         self.last_output = out
         if debug:
             print('The function has been parsed:\n', function)
-            print('Expected faulty input:', out)
+            print('Expected faulty input:', f'"{out}"')
         else:
             for file in os.listdir(self.path_to_duet):
                 if file.startswith(filename.split("/")[-1]):

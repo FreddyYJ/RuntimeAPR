@@ -87,7 +87,7 @@ setuptools.setup(
     author="YougJae Kim",
     author_email="",
     license="Apache License 2.0",
-    packages=['runtimeapr','runtimeapr.concolic','runtimeapr.loop', 'runtimeapr.concolic.restoreStr', 'runtimeapr.concolic.restoreStr.utilsAST'],
+    packages=['runtimeapr','runtimeapr.concolic','runtimeapr.loop', 'runtimeapr.concolic.restoreStr', 'runtimeapr.concolic.restoreStr.utilsAST', 'runtimeapr.concolic.restoreStr.duet'],
     package_dir={'': 'src'},
     python_requires=">=3.8,<3.12",
     package_data={'': ['main.native']},
