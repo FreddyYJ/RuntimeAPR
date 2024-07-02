@@ -114,7 +114,6 @@ class FunctionGenerator:
         Writes the function specification in @file.
         """
         example_sample = self.example_subset()
-        print(example_sample)
         print("trying to open", file)
         with open(file, 'w') as fd:
             normalized_specification = lisp_from_examples((self.inTypes, "String", example_sample))

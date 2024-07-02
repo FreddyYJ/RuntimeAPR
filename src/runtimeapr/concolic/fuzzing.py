@@ -300,7 +300,7 @@ class Fuzzer:
         return copy_args, copy_kwargs, copy_global_vars
 
     def update_args(self, new_args, new_kwargs, new_global_vars, verbose=True):
-        local_vars, global_vars, exc, line = self.run(new_args, new_kwargs, new_global_vars)
+        local_vars, global_vars, exc, line = self.run(new_args, new_kwargs, new_global_vars, verbose)
 
         if isinstance(exc, type(self.exception)) and self.excep_line == line:
             if verbose:
@@ -324,13 +324,14 @@ class Fuzzer:
                 print(f'Exception raised: {type(exc)}, but expected {type(self.exception)}.')
 
         if line != -1 and (len(local_vars) != 0 or len(global_vars) != 0):
-            is_same, local_diffs, global_diffs = self.is_vars_same(local_vars, global_vars, verbose=verbose)
+            is_same, local_diffs, global_diffs = self.is_vars_same(local_vars, global_vars, verbose)
             if is_same:
                 if verbose:
                     print('All states same, but exception not raised.')
         else:
-            print('No exception thrown, add this args to corpus.')
-            new_args, new_kwargs, new_global_vars = self.mutate(verbose=verbose)
+            if verbose:
+                print('No exception thrown, add this args to corpus.')
+            new_args, new_kwargs, new_global_vars = self.mutate(verbose)
             return new_args, new_kwargs, new_global_vars, False
 
         # TODO: def-use chain
@@ -355,10 +356,10 @@ class Fuzzer:
                     globals,
                 )
             )
-        new_args, new_kwargs, new_global_vars = self.mutate(local_diffs, global_diffs, verbose=verbose)
+        new_args, new_kwargs, new_global_vars = self.mutate(local_diffs, global_diffs, verbose)
         return new_args, new_kwargs, new_global_vars, False
 
-    def fuzz(self):
+    def fuzz(self, verbose=False):
         new_args = self.args
         new_kwargs = self.kwargs
         new_global_vars = self.global_vars
@@ -371,12 +372,20 @@ class Fuzzer:
         )
 
         trial = 1
-        while trial <= self.MAX_TRIALS:
-            print(f'Trial: {trial}')
-            print(new_args, new_kwargs, new_global_vars)
+        if not verbose:
             print()
-            new_args, new_kwargs, new_global_vars, finished = self.update_args(new_args, new_kwargs, new_global_vars)
+        while trial <= self.MAX_TRIALS:
+            if verbose:
+                print(f'Trial: {trial}')
+                print(new_args, new_kwargs, new_global_vars)
+                print()
+            else:
+                progress = int((trial+1)/self.MAX_TRIALS*10)
+                print("\033[F\rSearching a basic example: [" + "#"*progress + " "*(10-progress) + "]")
+            new_args, new_kwargs, new_global_vars, finished = self.update_args(new_args, new_kwargs, new_global_vars, verbose)
             if finished:
+                if not verbose:
+                    print(f"Exception found at trial {trial}!")
                 return new_args, new_kwargs, new_global_vars
             trial += 1
 
@@ -504,18 +513,11 @@ class Fuzzer:
         try:
             global is_concolic_execution
             is_concolic_execution = True
-            result = self.fn(*args, **kwargs)
-
-            ### TODO: save the (i,o) pairs to synthesize
-            ### TODO: compute the diff
-            ### TODO: make them coherent with(out) exceptions
-            # maybe get_function_state(self.f) before running so that we get states even after a returns
-
+            _ = self.fn(*args, **kwargs)
         except Exception as _exc:
             if verbose:
                 print(f'Exception raised: {type(_exc)}: {_exc}')
-            traceback.print_exception(type(_exc), _exc, _exc.__traceback__)
-
+                traceback.print_exception(type(_exc), _exc, _exc.__traceback__)
             innerframes = inspect.getinnerframes(_exc.__traceback__)
             innerframes.reverse()
             inner_info: inspect.FrameInfo = innerframes[0]
@@ -526,7 +528,6 @@ class Fuzzer:
             ):
                 cur_index += 1
                 inner_info = innerframes[cur_index]
-
             return (
                 inner_info.frame.f_locals,
                 inner_info.frame.f_globals,

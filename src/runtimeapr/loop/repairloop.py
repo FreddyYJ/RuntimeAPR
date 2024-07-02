@@ -351,7 +351,7 @@ class RepairloopRunner:
         print(f'Function throws an exception: {from_error}, move to repair loop.')
 
         # Run fuzzer to reproduce exception
-        print('Try fuzzing to find exception...')
+        print('\nTry fuzzing to find exception...')
         fuzzer=Fuzzer(self.fn,self.args,self.kwargs,self.bug_info.buggy_args_values,self.bug_info.buggy_global_values,
                       from_error,self.bug_info.buggy_line)
         buggy_args,buggy_kwargs,buggy_globals=fuzzer.fuzz()

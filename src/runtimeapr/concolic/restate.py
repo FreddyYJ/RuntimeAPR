@@ -512,7 +512,6 @@ class StateReproducer:
         # Create model
         y_tensor = torch.tensor(y, dtype=torch.float64, device=self.device)
         x_tensor = torch.tensor(x, dtype=torch.float64, device=self.device)
-        print("X=",x_tensor[0], "Y=", y_tensor[0])
 
         # This is the model. We now assumed the input and output is number.
         # TODO: Find and implememnt the model for string
@@ -649,22 +648,27 @@ class StateReproducer:
                 if t % 50 == 49:
                     print(f'Epoch {t+1} Loss {l.item()}')
 
-    def generate_args(self) -> List[Tuple[Dict[str,object],Dict[str,object],Dict[str,object]]]:
+    def generate_args(self, verbose=False) -> List[Tuple[Dict[str,object],Dict[str,object],Dict[str,object]]]:
         MAX_TRIALS = 300
         new_args, new_kwargs, new_globals = deepcopy([self.args, self.kwargs, self.global_vars])
         new_args_only, new_kwargs_only, new_globals_only = dict(), dict(), dict()
         mutated_objects = dict()
         examples = []
-
+        if not verbose:
+            print()
         with open('states.log', 'w') as f:
             for trial in range(1, MAX_TRIALS):
-                print(f'Trial {trial}')
+                if verbose:
+                    print(f'Trial {trial}')
+                else:
+                    progress = int((trial+1)/MAX_TRIALS*10)
+                    print("\033[F\rGenerating args: [" + "#"*progress + " "*(10-progress) + "]")
 
                 prev_args, prev_kwargs, prev_globals = deepcopy([new_args, new_kwargs, new_globals])
                 new_args, new_kwargs, new_globals = deepcopy([new_args, new_kwargs, new_globals])
-                reproduced_local_vars, reproduced_global_vars = self.run(prev_args, prev_kwargs, prev_globals)
+                reproduced_local_vars, reproduced_global_vars = self.run(prev_args, prev_kwargs, prev_globals, verbose)
                 if reproduced_local_vars is None:
-                    print(f'Exception not raised, skip!')
+                    if verbose: print(f'Exception not raised, skip!')
                     copied_args, copied_kwargs, copied_globals = deepcopy([self.args, self.kwargs, self.global_vars])
                     new_args_only, new_kwargs_only, new_globals_only = (
                         dict(),
@@ -678,7 +682,7 @@ class StateReproducer:
                         if arg_name in self.arg_names:
                             index = self.arg_names.index(arg_name)
                             new_args[index] = self.mutate_object(
-                                copied_args[index], arg_name, cand_args, mutated_objects
+                                copied_args[index], arg_name, cand_args, mutated_objects, verbose
                             )
                             new_args_only[index] = new_args[index]
                     # Mutate kwargs
@@ -690,6 +694,7 @@ class StateReproducer:
                                 kwarg_name,
                                 cand_kwargs,
                                 mutated_objects,
+                                verbose,
                             )
                             new_kwargs_only[kwarg_name] = new_kwargs[kwarg_name]
                     # Mutate globals
@@ -701,6 +706,7 @@ class StateReproducer:
                                 global_name,
                                 cand_globals,
                                 mutated_objects,
+                                verbose,
                             )
                             new_globals_only[global_name] = new_globals[global_name]
 
@@ -711,6 +717,7 @@ class StateReproducer:
                 local_diffs, global_diffs = self.is_vars_same(
                     cleaned_reproduced_local_vars,
                     cleaned_reproduced_global_vars,
+                    verbose,
                 )
                 if len(local_diffs) == 0 and len(global_diffs) == 0:
                     print(f'States reproduced in trial {trial}')
@@ -747,7 +754,7 @@ class StateReproducer:
                 print(f'Local diffs: {cur_local_values}', file=f)
                 print(f'Global diffs: {cur_global_values}', file=f)
 
-                cand_args, cand_kwargs, cand_globals = self.find_candidate_inputs(local_diffs, global_diffs)
+                cand_args, cand_kwargs, cand_globals = self.find_candidate_inputs(local_diffs, global_diffs, verbose)
 
                 new_args_only, new_kwargs_only, new_globals_only = (
                     dict(),
@@ -760,7 +767,7 @@ class StateReproducer:
                     arg_name = cand_arg.split('.')[0]
                     if arg_name in self.arg_names:
                         index = self.arg_names.index(arg_name)
-                        new_args[index] = self.mutate_object(new_args[index], arg_name, cand_args, mutated_objects)
+                        new_args[index] = self.mutate_object(new_args[index], arg_name, cand_args, mutated_objects, verbose)
                         new_args_only[cand_arg] = new_args[index]
                 # Mutate kwargs
                 for cand_kwarg in cand_kwargs:
@@ -771,6 +778,7 @@ class StateReproducer:
                             kwarg_name,
                             cand_kwargs,
                             mutated_objects,
+                            verbose,
                         )
                         new_kwargs_only[cand_kwarg] = new_kwargs[kwarg_name]
                 # Mutate globals
@@ -782,6 +790,7 @@ class StateReproducer:
                             global_name,
                             cand_globals,
                             mutated_objects,
+                            verbose,
                         )
                         new_globals_only[cand_global] = new_globals[global_name]
 
@@ -806,6 +815,7 @@ class StateReproducer:
         return 
 
     def reproduce(self)-> Tuple[List, Dict, Dict]:
+        print()
         examples=self.generate_args()
         if self.solution is not None:
             args = [self.solution[0][varname] for varname in self.arg_names]
@@ -839,12 +849,13 @@ class StateReproducer:
                     if not isinstance(value, str):
                         new_globals[varname] = value
 
-            reproduced_local_vars, reproduced_global_vars = self.run(new_args, new_kwargs, new_globals)
+            reproduced_local_vars, reproduced_global_vars = self.run(new_args, new_kwargs, new_globals, verbose=False)
             if reproduced_local_vars is None:
                 self.improve(str_states, fun_gens, reproduced_int, None, None)
             local_diffs, global_diffs = self.is_vars_same(
                 prune_default_local_var(self.fn, reproduced_local_vars),
                 prune_default_global_var(self.fn, reproduced_global_vars),
+                verbose=False,
             )
             if len(local_diffs) == 0 and len(global_diffs) == 0:
                 print(f'States reproduced after {trial} trial(s)')
