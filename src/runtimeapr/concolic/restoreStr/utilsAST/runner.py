@@ -12,20 +12,12 @@ rd.seed(57)
 
 
 class FunctionGenerator:
-    ### TODO: check in the body of the function if there are hardcoded strings/integers and add them as a possible constants to make it faster
-
     def __init__(
         self,
         buggy_var: str,
         examples: List[Tuple[Dict[str, object], Dict[str, object], Dict[str, object]]],
         buggy_locals,
         buggy_globals,
-        # args,
-        # kwargs,
-        # global_vars,
-        # local_diffs,
-        # global_diffs,
-        # examples: List[Tuple[List[Union[str, int, bool]], Union[str, int, bool]]],
     ):
         self.buggy_var = buggy_var
         self.buggy_locals = buggy_locals
@@ -36,10 +28,13 @@ class FunctionGenerator:
         """
         [ (outputs, buggy_variable_input) ]
         """
-
+        self.skip=False
+        if not self.examples:
+            self.skip=True
+            return
         self.path_to_duet = "/" + os.path.join(*__file__.split('/')[:-2], 'duet/')
         self.additional_examples: List[Tuple[List[Union[str, int, bool]], Union[str, int, bool]]] = []
-        self.timeout = 15
+        self.timeout = 40
         self.max_examples = 100
         self.inTypes = list(map(get_type, self.examples[0][0].values()))
         self.last_function = None # If a function was found before, try it before synthesizing again
@@ -72,7 +67,7 @@ class FunctionGenerator:
         return additional_examples
     
     def prune_heuristic(self):
-        return rd.sample(self.examples, self.max_examples)
+        return rd.sample(self.examples, min(self.max_examples, len(self.examples)))
         ### TODO: get len global and local diff
         order = sorted(
             range(len(self.global_diff)),
@@ -91,7 +86,7 @@ class FunctionGenerator:
         self.examples += additional_examples
 
         if output is None:
-            self.timeout += 2
+            self.timeout += 10
         elif reproduced_local_vars is not None:
             pattern = r'\\[ntrabfuvx]|[\[\(\)\]\'"]'
             reproduced_global_vars = dict(filter(lambda x: type(x[1]) in (int, str, bool), reproduced_global_vars.items()))
@@ -114,7 +109,7 @@ class FunctionGenerator:
         Writes the function specification in @file.
         """
         example_sample = self.example_subset()
-        print("trying to open", file)
+        print("Using", len(example_sample), "examples")
         with open(file, 'w') as fd:
             normalized_specification = lisp_from_examples((self.inTypes, "String", example_sample))
             print(normalized_specification, file=fd)
@@ -149,6 +144,8 @@ class FunctionGenerator:
         """
         returns the expected input according to the current policy and examples
         """
+        if self.skip:
+            return None
         if debug:
             print('Searching an initial state')
         filename = self.get_file_name()
@@ -156,6 +153,10 @@ class FunctionGenerator:
             for args, result in self.examples:
                 old_out = self.last_function(*(args[varname] for varname in self.examples[0][0]))
                 if old_out != result:
+                    print("HAAAAAAAAAAAAAAAA")
+                    print(args)
+                    print(f"'{old_out}'")
+                    print(f"'{result}'")
                     break
             else:
                 print("The last function still works. Using again the same expected input:", self.last_output)
@@ -177,12 +178,8 @@ class FunctionGenerator:
         args = {}
         for varname in self.examples[0][0]:
             if varname in self.buggy_locals:
-                if debug:
-                    print("local:", varname, self.buggy_locals[varname])
                 args[varname] = self.buggy_locals[varname]
             else:
-                if debug:
-                    print("global:", varname, self.buggy_globals[varname])
                 args[varname] = self.buggy_globals[varname]
 
         out = function(*(args[varname] for varname in self.examples[0][0]))

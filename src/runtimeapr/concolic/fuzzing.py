@@ -26,7 +26,7 @@ from .ConcolicTracer import ConcolicTracer, symbolize
 
 
 class Fuzzer:
-    MAX_TRIALS = 100
+    MAX_TRIALS = 500
 
     def __init__(
         self,
@@ -181,7 +181,7 @@ class Fuzzer:
 
         return False
 
-    def mutate(self, local_diff: Optional[dict] = None, global_diff: Optional[dict] = None, verbose=True):
+    def mutate(self, local_diff: Optional[dict] = None, global_diff: Optional[dict] = None, *, verbose=True):
         index = random.randint(0, len(self.corpus) - 1)
         selected_args, selected_kwargs, selected_global_vars = self.corpus[index]
         copy_args, copy_kwargs, copy_global_vars = deepcopy([selected_args, selected_kwargs, selected_global_vars])
@@ -254,7 +254,6 @@ class Fuzzer:
 
         # Mutate the arguments
         if change_args:
-            print("HAAAAAAAAAAAAA")
             arg_names = list(inspect.signature(self.fn).parameters.keys())
             for i, arg in enumerate(copy_args):
                 if is_default_local(self.fn, f'arg{i}', arg):
@@ -301,7 +300,6 @@ class Fuzzer:
 
     def update_args(self, new_args, new_kwargs, new_global_vars, verbose=True):
         local_vars, global_vars, exc, line = self.run(new_args, new_kwargs, new_global_vars, verbose)
-
         if isinstance(exc, type(self.exception)) and self.excep_line == line:
             if verbose:
                 print('Exception raised, stop fuzzing.')
@@ -331,7 +329,7 @@ class Fuzzer:
         else:
             if verbose:
                 print('No exception thrown, add this args to corpus.')
-            new_args, new_kwargs, new_global_vars = self.mutate(verbose)
+            new_args, new_kwargs, new_global_vars = self.mutate(verbose=verbose)
             return new_args, new_kwargs, new_global_vars, False
 
         # TODO: def-use chain
@@ -356,10 +354,10 @@ class Fuzzer:
                     globals,
                 )
             )
-        new_args, new_kwargs, new_global_vars = self.mutate(local_diffs, global_diffs, verbose)
+        new_args, new_kwargs, new_global_vars = self.mutate(local_diffs, global_diffs, verbose=verbose)
         return new_args, new_kwargs, new_global_vars, False
 
-    def fuzz(self, verbose=False):
+    def fuzz(self, verbose=True):
         new_args = self.args
         new_kwargs = self.kwargs
         new_global_vars = self.global_vars
@@ -377,8 +375,6 @@ class Fuzzer:
         while trial <= self.MAX_TRIALS:
             if verbose:
                 print(f'Trial: {trial}')
-                print(new_args, new_kwargs, new_global_vars)
-                print()
             else:
                 progress = int((trial+1)/self.MAX_TRIALS*10)
                 print("\033[F\rSearching a basic example: [" + "#"*progress + " "*(10-progress) + "]")
@@ -408,7 +404,7 @@ class Fuzzer:
                 return 0
         return len(self.examples)
 
-    def is_vars_same(self, local_vars, global_vars, verbose=True):
+    def is_vars_same(self, local_vars, global_vars, verbose=False):
         is_same = True
         local_diffs: Dict[str, Tuple[object]] = dict()
         global_diffs: Dict[str, Tuple[object]] = dict()

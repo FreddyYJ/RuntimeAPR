@@ -40,6 +40,7 @@ class StateReproducer:
         kwargs: Dict[str, object],
         global_vars: Dict[str, object],
         def_use_chain: Dict[str, List[str]],
+        exception: Exception,
     ):
         self.fn = fn
         self.args_names = args_names
@@ -50,6 +51,7 @@ class StateReproducer:
         self.kwargs = kwargs
         self.global_vars = prune_default_global_var(self.fn, global_vars)
         self.def_use_chains = def_use_chain
+        self.exception = exception
         self.solution = None
         self.examples: List[Tuple[Dict[str, object], Dict[str, object], Dict[str, object]]] = []
         """
@@ -88,6 +90,8 @@ class StateReproducer:
             is_concolic_execution = True
             result = self.fn(*args, **kwargs)
         except Exception as _exc:
+            if not isinstance(_exc, type(self.exception)):
+                return None, None
             if verbose:
                 print(f'Exception raised: {type(_exc)}: {_exc}')
             innerframes = inspect.getinnerframes(_exc.__traceback__)
@@ -401,14 +405,14 @@ class StateReproducer:
             return (
                 isinstance(obj, int)
                 or isinstance(obj, float)
-                #or isinstance(obj, str)
+                # or isinstance(obj, str)
                 or isinstance(obj, bytes)
                 or isinstance(obj, Enum)
-                #or isinstance(obj, list)
-                #or isinstance(obj, set)
-                #or isinstance(obj, dict)
-                #or isinstance(obj, tuple)
-                #or hasattr(obj, '__dict__')
+                or isinstance(obj, list)
+                or isinstance(obj, set)
+                or isinstance(obj, dict)
+                or isinstance(obj, tuple)
+                or hasattr(obj, '__dict__')
             )
 
         # Store args and vars keys first for the order and padding
@@ -512,6 +516,21 @@ class StateReproducer:
         # Create model
         y_tensor = torch.tensor(y, dtype=torch.float64, device=self.device)
         x_tensor = torch.tensor(x, dtype=torch.float64, device=self.device)
+        diff = y_tensor - x_tensor
+        if diff.nelement() and (diff==diff[0]).all():
+            print("Pattern recognised")
+            target_x_tensor = torch.tensor(t_x, dtype=torch.float64, device=self.device)
+            target_y = list((target_x_tensor + diff[0]).numpy(force=True))
+            for i, y_value in enumerate(target_y):
+                if isinstance(y[0][i], int):
+                    target_y[i] = round(y_value)
+
+            predicted: Dict[str, object] = dict()
+            for key, _y in zip(input_keys, target_y):
+                predicted[key] = _y
+
+            print(f'Predicted: {predicted} from {t_x}')
+            return predicted
 
         # This is the model. We now assumed the input and output is number.
         # TODO: Find and implememnt the model for string
@@ -803,8 +822,8 @@ class StateReproducer:
         return examples
 
     def reproduce_int(self)-> Dict[str, object]:
-        buggy_vars = deepcopy(self.buggy_local_vars)
-        buggy_vars.update(self.buggy_global_vars)
+        buggy_vars = deepcopy(self.buggy_global_vars)
+        buggy_vars.update(self.buggy_local_vars)
         return self.torch_predict(buggy_vars)
 
     def improve(self, str_states, fun_gens: Dict[str, FunctionGenerator], reproduced_int, reproduced_local_vars, reproduced_global_vars):
@@ -814,14 +833,13 @@ class StateReproducer:
 
         return 
 
-    def reproduce(self)-> Tuple[List, Dict, Dict]:
+    def reproduce(self)-> Dict[str, object]:
         print()
         examples=self.generate_args()
         if self.solution is not None:
-            args = [self.solution[0][varname] for varname in self.arg_names]
-            kwargs = dict(filter(lambda x: not x[0] in self.arg_names, self.solution[0].items()))
-            return args, kwargs, self.solution[1]
-        MAX_TRIALS = 10
+            self.solution[1].update(self.solution[0])
+            return self.solution[1]
+        MAX_TRIALS = 100
         fun_gens: Dict[str, FunctionGenerator] = dict()
         for varname, value in self.buggy_global_vars.items():
             if isinstance(value, str):
@@ -835,7 +853,6 @@ class StateReproducer:
             new_args, new_kwargs, new_globals = deepcopy((self.args, self.kwargs, self.global_vars))
             for varname, fun_gen in fun_gens.items():
                 state = fun_gen.get_expected_state(debug=True)
-                print(state)
                 str_states[varname] = state
                 if state is not None:
                     new_globals[varname] = state
@@ -859,5 +876,8 @@ class StateReproducer:
             )
             if len(local_diffs) == 0 and len(global_diffs) == 0:
                 print(f'States reproduced after {trial} trial(s)')
-                return new_args, new_kwargs, new_globals
+                dict_args = dict(zip(self.arg_names, new_args))
+                return {**new_globals, **dict_args, **new_kwargs}
+            print(f"Different output local: {local_diffs}, global: {global_diffs}")
             self.improve(str_states, fun_gens, reproduced_int, reproduced_local_vars, reproduced_global_vars)
+        raise TimeoutError
