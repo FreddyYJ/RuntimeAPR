@@ -249,9 +249,9 @@ let fun_apply_signature op values =
 		let str1s = List.map get_string (List.nth values 0) in  
 		let str2s = List.map get_string (List.nth values 1) in
 		(List.map2 (fun str1 str2 -> CString (str1 ^ str2)) str1s str2s) 
-	(* else if (String.compare op "str.rev") = 0 then 
+	else if (String.compare op "str.rev") = 0 then 
 		let strs = List.map get_string (List.nth values 0) in 
-		(List.map (fun str -> CString (BatString.rev str)) strs) *)
+		(List.map (fun str -> CString (BatString.rev str)) strs)
 	else if (String.compare op "str.contains") = 0 then
 		let str1s = List.map get_string (List.nth values 0) in  
 		let str2s = List.map get_string (List.nth values 1) in
