@@ -390,11 +390,27 @@ class RepairloopRunner:
 
         # Mutating buggy inputs to find exact states
         reproducer=StateReproducer(self.fn,self.target_func.args,self.bug_info.buggy_args_values,self.bug_info.buggy_global_values,
-                                   buggy_args,buggy_kwargs,buggy_globals,self.defines)
+                                   buggy_args,buggy_kwargs,buggy_globals,self.defines,from_error)
         func_entry=reproducer.reproduce()
 
         # Repair
-        print("\033[94mFunction entry found:\033[0m", func_entry)
+        print("\033[94mFunction entry found:\033[0m")
+        print("arg:")
+        if not len(reproducer.arg_names):
+            print("\tNone")
+        for argname in reproducer.arg_names:
+            print(f"\t{argname}:", func_entry[argname])
+        print("kwarg:")
+        if not len(buggy_kwargs):
+            print("\tNone")
+        for kwargname in buggy_kwargs:
+            print(f"\t{kwargname}:" ,func_entry[kwargname])
+        print("global:")
+        if not len(buggy_globals):
+            print("\tNone")
+        for globalname in buggy_globals:
+            if globalname in func_entry:
+                print(f"\t{globalname}:", func_entry[globalname])
         return self.repair(func_entry,from_error)
 
         while not is_same:

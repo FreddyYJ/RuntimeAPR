@@ -45,6 +45,11 @@ class DependencyGraph:
                 return node.value.id+'.'+node.attr
             elif isinstance(node,ast.Subscript):
                 return node.value.id+'['+self._get_full_attribute_name(node.slice)+']'
+        elif isinstance(node.value, ast.Constant):
+            if isinstance(node,ast.Attribute):
+                return node.value.value+'.'+node.attr
+            elif isinstance(node,ast.Subscript):
+                return node.value.value+'['+self._get_full_attribute_name(node.slice)+']'            
         else:
             raise ValueError(f'Unknown attribute parent value type: {type(node.value)}')
 
