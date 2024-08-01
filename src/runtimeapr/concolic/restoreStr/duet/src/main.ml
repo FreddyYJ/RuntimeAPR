@@ -37,7 +37,11 @@ let main () =
             , grammar
             , forall_var_map
             , spec )
-        with Failure _ -> cegis (Compatibility.modify_spec spec)
+        with Failure e ->
+          let msg = Printexc.to_string (Failure e)
+          and stack = Printexc.get_backtrace () in
+          Printf.eprintf "there was an error: %s, %s\n" msg stack ;
+          cegis (Compatibility.modify_spec spec)
       in
       my_prerr_endline
         (Printf.sprintf "** Proposed candidate: %s **"

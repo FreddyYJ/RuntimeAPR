@@ -114,6 +114,28 @@ let rec size_of_expr expr =
   | Function (op, exprs, ty) ->
       List.fold_left (fun size expr -> size + size_of_expr expr) 1 exprs
 
+let size_of_string s =
+  let len = String.length s in
+  let rec aux i count =
+    if i >= len then
+      count
+    else
+      let char_len =
+        if Char.code s.[i] land 0b10000000 = 0 then
+          1 (* 1-byte character *)
+        else if Char.code s.[i] land 0b11100000 = 0b11000000 then
+          2 (* 2-byte character *)
+        else if Char.code s.[i] land 0b11110000 = 0b11100000 then
+          3 (* 3-byte character *)
+        else if Char.code s.[i] land 0b11111000 = 0b11110000 then
+          4 (* 4-byte character *)
+        else
+          1 (* Invalid byte, but count it as one for robustness *)
+      in
+      aux (i + char_len) (count + 1)
+  in
+  aux 0 0
+
 let expr2const expr =
   match expr with Const const -> const | _ -> assert false
 
@@ -236,7 +258,7 @@ let fun_apply_signature op values =
     (** STRING theory **)
   else if String.compare op "str.len" = 0 then
     let strs = List.map get_string (List.nth values 0) in
-    List.map (fun str -> CInt (String.length str)) strs
+    List.map (fun str -> CInt (size_of_string str)) strs
   else if String.compare op "str.to.int" = 0 then
     let strs = List.map get_string (List.nth values 0) in
     List.map (fun str -> CInt (int_of_string str)) strs

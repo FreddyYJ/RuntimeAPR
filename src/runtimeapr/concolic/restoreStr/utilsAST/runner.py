@@ -24,22 +24,21 @@ class FunctionGenerator:
         self.buggy_globals = buggy_globals
 
         # the order of the dict keys should not be changed as the dict will not be modified
-        self.examples = self.format_examples(examples)
+        self.examples = self.format_examples(examples[1:])
         """
         [ (outputs, buggy_variable_input) ]
         """
-        self.skip=False
+        self.skip = False
         if not self.examples:
-            self.skip=True
+            self.skip = True
             return
         self.path_to_duet = "/" + os.path.join(*__file__.split('/')[:-2], 'duet/')
         self.additional_examples: List[Tuple[List[Union[str, int, bool]], Union[str, int, bool]]] = []
-        self.timeout = 40
+        self.timeout = 15
         self.max_examples = 100
         self.inTypes = list(map(get_type, self.examples[0][0].values()))
-        self.last_function = None # If a function was found before, try it before synthesizing again
+        self.last_function = None  # If a function was found before, try it before synthesizing again
         self.last_output = None
-
 
     def format_examples(self, examples):
         additional_examples: List[Tuple[Dict[str, Union[str, int, bool]], Union[str, int, bool]]] = list(
@@ -53,7 +52,8 @@ class FunctionGenerator:
         )
         additional_examples = list(
             map(
-                lambda ex: (dict(filter(lambda x: type(x[1]) in (int, str, bool), ex[0].items())), ex[1]), additional_examples
+                lambda ex: (dict(filter(lambda x: type(x[1]) in (int, str, bool), ex[0].items())), ex[1]),
+                additional_examples,
             )
         )
         # Duet cannot read it so ignore escaped caracters
@@ -65,7 +65,7 @@ class FunctionGenerator:
             )
         )
         return additional_examples
-    
+
     def prune_heuristic(self):
         return rd.sample(self.examples, min(self.max_examples, len(self.examples)))
         ### TODO: get len global and local diff
@@ -80,17 +80,24 @@ class FunctionGenerator:
         extract a subset of possibly interesting examples to synthesize a function
         """
         return self.prune_heuristic() + self.additional_examples
-    
+
     def improve(self, output, new_examples, reproduced_local_vars, reproduced_global_vars):
-        additional_examples = self.format_examples(new_examples)
+        additional_examples = self.format_examples(new_examples[1:])
+        for ex in additional_examples:
+            if len(ex[0]) != 3:
+                print(ex)
         self.examples += additional_examples
 
         if output is None:
             self.timeout += 10
         elif reproduced_local_vars is not None:
             pattern = r'\\[ntrabfuvx]|[\[\(\)\]\'"]'
-            reproduced_global_vars = dict(filter(lambda x: type(x[1]) in (int, str, bool), reproduced_global_vars.items()))
-            reproduced_local_vars = dict(filter(lambda x: type(x[1]) in (int, str, bool), reproduced_local_vars.items()))
+            reproduced_global_vars = dict(
+                filter(lambda x: type(x[1]) in (int, str, bool), reproduced_global_vars.items())
+            )
+            reproduced_local_vars = dict(
+                filter(lambda x: type(x[1]) in (int, str, bool), reproduced_local_vars.items())
+            )
             if not any(re.search(pattern, repr(k)[1:-1]) for k in reproduced_global_vars.values() if type(k) == str):
                 if not any(re.search(pattern, repr(k)[1:-1]) for k in reproduced_local_vars.values() if type(k) == str):
                     self.additional_examples.append(({**reproduced_global_vars, **reproduced_local_vars}, output))
@@ -125,14 +132,14 @@ class FunctionGenerator:
 
         try:
             result = subprocess.run(
-                [self.path_to_duet + 'main.native', file],
+                [self.path_to_duet + 'main.native', file, "-lbu"],
                 stderr=subprocess.PIPE,
                 universal_newlines=True,
                 timeout=timeout,
             )
         except subprocess.TimeoutExpired:
             if debug:
-                print("\033[91;1;4mTimeout reached\033[0m, longer duration expected")
+                print("\033[91;1;4mTimeout reached\033[0m, improvments expected")
             return None
         if "err" in result.stderr:
             print("\033[91mAn unexpected error occured:\033[0m", result.stderr)
@@ -153,15 +160,13 @@ class FunctionGenerator:
             for args, result in self.examples:
                 old_out = self.last_function(*(args[varname] for varname in self.examples[0][0]))
                 if old_out != result:
-                    print("HAAAAAAAAAAAAAAAA")
-                    print(args)
-                    print(f"'{old_out}'")
-                    print(f"'{result}'")
+                    self.last_function = None
+                    self.last_output = None
                     break
             else:
                 print("The last function still works. Using again the same expected input:", self.last_output)
                 return self.last_output
-        
+
         self.generate_specification(filename)
         if debug:
             print('The specification has been written at', filename)

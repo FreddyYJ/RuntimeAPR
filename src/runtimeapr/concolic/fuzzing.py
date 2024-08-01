@@ -53,11 +53,6 @@ class Fuzzer:
         self.corpus: List[Tuple[List[object], Dict[str, object], Dict[str, object]]] = []
         self.candidate_vars: List[str] = []
 
-        self.examples: List[
-            Tuple[Tuple[List[object], Dict[str, object], Dict[str, object]], Tuple[List[object], Dict[str, object]]]
-        ] = []
-        """ [((in_args, in_kwargs, in_globals), (out_args, out_globals))]"""
-
         self.diffs = []
 
     def mutate_object(self, obj: object, prev_name='', continue_mutate=True):
@@ -303,16 +298,6 @@ class Fuzzer:
         if isinstance(exc, type(self.exception)) and self.excep_line == line:
             if verbose:
                 print('Exception raised, stop fuzzing.')
-            self.examples.append(
-                (
-                    (
-                        new_args,
-                        new_kwargs,
-                        new_global_vars,
-                    ),
-                    (prune_default_local_var(self.fn, local_vars), prune_default_global_var(self.fn, global_vars)),
-                )
-            )
             return new_args, new_kwargs, new_global_vars, True
         elif line != -1 and self.excep_line != line:
             if verbose:
@@ -376,9 +361,11 @@ class Fuzzer:
             if verbose:
                 print(f'Trial: {trial}')
             else:
-                progress = int((trial+1)/self.MAX_TRIALS*10)
-                print("\033[F\rSearching a basic example: [" + "#"*progress + " "*(10-progress) + "]")
-            new_args, new_kwargs, new_global_vars, finished = self.update_args(new_args, new_kwargs, new_global_vars, verbose)
+                progress = int((trial + 1) / self.MAX_TRIALS * 10)
+                print("\033[F\rSearching a basic example: [" + "#" * progress + " " * (10 - progress) + "]")
+            new_args, new_kwargs, new_global_vars, finished = self.update_args(
+                new_args, new_kwargs, new_global_vars, verbose
+            )
             if finished:
                 if not verbose:
                     print(f"Exception found at trial {trial}!")
@@ -386,23 +373,6 @@ class Fuzzer:
             trial += 1
 
         return None, None, None
-
-    def generate_examples(self, max_tests: int, max_iter=100, verbose=False):
-        """
-        Expects one sucessfull call of fuzzer before. I.e. expects to have `self.examples` nonempty.
-        """
-
-        new_args, new_kwargs, new_global_vars = self.examples[0][0]
-
-        for trial in range(max_iter):
-            if verbose:
-                print('Trial:', trial)
-            new_args, new_kwargs, new_global_vars, _ = self.update_args(
-                new_args, new_kwargs, new_global_vars, verbose=verbose
-            )
-            if len(self.examples) >= max_tests:
-                return 0
-        return len(self.examples)
 
     def is_vars_same(self, local_vars, global_vars, verbose=False):
         is_same = True

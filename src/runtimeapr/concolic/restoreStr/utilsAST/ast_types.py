@@ -174,6 +174,11 @@ class SubStr(F3):
         return self.x(*args)[begin : begin + self.z(*args)]
 
 
+class Rev(F1):
+    def __call__(self, *args):
+        return self.x(*args)[::-1]
+
+
 # Bit Vector operations
 class BVAdd(BinOp):
     # I hope I will remember to use np arrays...

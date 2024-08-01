@@ -1,8 +1,10 @@
+ifdef DEBUG
+	DEBUG="debug"
+endif
 all: main
 	
 main:
-#	ocamlbuild -use-ocamlfind -tag debug src/main.byte
-	ocamlbuild -use-ocamlfind src/main.native
+	ocamlbuild -use-ocamlfind src/main.native -tag $(DEBUG)
 
 clean:
 	ocamlbuild -clean

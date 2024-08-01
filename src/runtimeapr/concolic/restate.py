@@ -24,8 +24,8 @@ from typing import Dict, List, Set, Tuple
 from types import FunctionType, ModuleType
 import inspect
 from copy import deepcopy, copy
-import torch # type: ignore
-import torch.nn as nn # type: ignore
+import torch  # type: ignore
+import torch.nn as nn  # type: ignore
 
 
 class StateReproducer:
@@ -90,7 +90,7 @@ class StateReproducer:
             is_concolic_execution = True
             result = self.fn(*args, **kwargs)
         except Exception as _exc:
-            if not isinstance(_exc, type(self.exception)):
+            if not (type(_exc) is type(self.exception) and _exc.args == self.exception.args):
                 return None, None
             if verbose:
                 print(f'Exception raised: {type(_exc)}: {_exc}')
@@ -173,7 +173,9 @@ class StateReproducer:
 
         return local_diffs, global_diffs
 
-    def find_candidate_inputs(self, local_vars: Dict[str, Tuple[object, object]], global_vars: Dict[str, Tuple[object, object]], verbose=True):
+    def find_candidate_inputs(
+        self, local_vars: Dict[str, Tuple[object, object]], global_vars: Dict[str, Tuple[object, object]], verbose=True
+    ):
         pos_args = []
         for arg in self.args_names.posonlyargs:
             pos_args.append(arg.arg)
@@ -221,7 +223,7 @@ class StateReproducer:
                     # TODO new global var found
                 else:
                     if verbose:
-                        try: # obj can be some non-utf-8-representable characters
+                        try:  # obj can be some non-utf-8-representable characters
                             print(f'Mutate global var {name}: {base_obj} -> {obj}')
                         except:
                             pass
@@ -397,6 +399,9 @@ class StateReproducer:
 
     def torch_predict(self, target_x: Dict[str, object]):
         # self.diffs = list(filter(lambda diff: diff[3], self.diffs))
+        if len(self.diffs) < 2:
+            print("Not enough tests for the model")
+            return target_x
         x, y = [], []
         input_keys = []
         output_keys = []
@@ -419,7 +424,7 @@ class StateReproducer:
         for diff in self.diffs[1:]:
             args, kwargs, globals, mutated_objects, local_vars, global_vars = diff
             for name, obj in mutated_objects.items():
-                if name not in input_keys and is_mutable_obj(obj):
+                if name not in input_keys and is_mutable_obj(obj) and not isinstance(obj, str):
                     input_keys.append(name)
             for name, obj in local_vars.items():
                 if name not in output_keys:
@@ -517,7 +522,31 @@ class StateReproducer:
         y_tensor = torch.tensor(y, dtype=torch.float64, device=self.device)
         x_tensor = torch.tensor(x, dtype=torch.float64, device=self.device)
         diff = y_tensor - x_tensor
-        if diff.nelement() and (diff==diff[0]).all():
+        mask = diff == diff[0]
+        recognized = {}
+        for index in range(len(diff[0])):
+            if mask[:, index].all():
+                print("Pattern recognised for", input_keys[index])
+                y_value = t_x[index] + diff[0][index].item()
+                if isinstance(y[0][i], int):
+                    y_value = round(y_value)
+                recognized[input_keys[index]] = y_value
+
+        quotient = y_tensor / x_tensor
+        mask_quot = quotient == quotient[0]
+        for index in range(len(quotient[0])):
+            if input_keys[index] not in recognized and mask_quot[:, index].all():
+                print("Pattern recognised for", input_keys[index])
+                y_value = t_x[index] * quotient[0][index].item()
+                if isinstance(y[0][i], int):
+                    y_value = round(y_value)
+                recognized[input_keys[index]] = y_value
+
+        if len(recognized) == len(t_x):
+            print(f'Recognized all: {recognized} from {t_x}')
+            return recognized
+
+        if diff.nelement() and (diff == diff[0]).all():  # torch.cat([a[:,1].unsqueeze(1), a[:,2].unsqueeze(1)], dim=1)
             print("Pattern recognised")
             target_x_tensor = torch.tensor(t_x, dtype=torch.float64, device=self.device)
             target_y = list((target_x_tensor + diff[0]).numpy(force=True))
@@ -667,8 +696,10 @@ class StateReproducer:
                 if t % 50 == 49:
                     print(f'Epoch {t+1} Loss {l.item()}')
 
-    def generate_args(self, verbose=False) -> List[Tuple[Dict[str,object],Dict[str,object],Dict[str,object]]]:
-        MAX_TRIALS = 300
+    def generate_args(
+        self, verbose=False, ignore_first=False
+    ) -> List[Tuple[Dict[str, object], Dict[str, object], Dict[str, object]]]:
+        MAX_TRIALS = 500
         new_args, new_kwargs, new_globals = deepcopy([self.args, self.kwargs, self.global_vars])
         new_args_only, new_kwargs_only, new_globals_only = dict(), dict(), dict()
         mutated_objects = dict()
@@ -680,14 +711,15 @@ class StateReproducer:
                 if verbose:
                     print(f'Trial {trial}')
                 else:
-                    progress = int((trial+1)/MAX_TRIALS*10)
-                    print("\033[F\rGenerating args: [" + "#"*progress + " "*(10-progress) + "]")
+                    progress = int((trial + 1) / MAX_TRIALS * 10)
+                    print("\033[F\rGenerating args: [" + "#" * progress + " " * (10 - progress) + "]")
 
                 prev_args, prev_kwargs, prev_globals = deepcopy([new_args, new_kwargs, new_globals])
                 new_args, new_kwargs, new_globals = deepcopy([new_args, new_kwargs, new_globals])
                 reproduced_local_vars, reproduced_global_vars = self.run(prev_args, prev_kwargs, prev_globals, verbose)
                 if reproduced_local_vars is None:
-                    if verbose: print(f'Exception not raised, skip!')
+                    if verbose:
+                        print(f'Exception not raised, skip!')
                     copied_args, copied_kwargs, copied_globals = deepcopy([self.args, self.kwargs, self.global_vars])
                     new_args_only, new_kwargs_only, new_globals_only = (
                         dict(),
@@ -756,16 +788,19 @@ class StateReproducer:
                         prune_default_global_var(self.fn, reproduced_global_vars),
                     )
                 )
-                self.diffs.append(
-                    (
-                        new_args,
-                        prune_default_local_var(self.fn, new_kwargs),
-                        prune_default_global_var(self.fn, new_globals),
-                        mutated_objects,
-                        cur_local_values,
-                        cur_global_values,
+                if not ignore_first:
+                    self.diffs.append(
+                        (
+                            new_args,
+                            prune_default_local_var(self.fn, new_kwargs),
+                            prune_default_global_var(self.fn, new_globals),
+                            mutated_objects,
+                            cur_local_values,
+                            cur_global_values,
+                        )
                     )
-                )
+                else:
+                    ignore_first = False
                 print(f'Trial: {trial}', file=f)
                 print(f'Args: {new_args}', file=f)
                 print(f'Kwargs: {new_kwargs}', file=f)
@@ -786,7 +821,9 @@ class StateReproducer:
                     arg_name = cand_arg.split('.')[0]
                     if arg_name in self.arg_names:
                         index = self.arg_names.index(arg_name)
-                        new_args[index] = self.mutate_object(new_args[index], arg_name, cand_args, mutated_objects, verbose)
+                        new_args[index] = self.mutate_object(
+                            new_args[index], arg_name, cand_args, mutated_objects, verbose
+                        )
                         new_args_only[cand_arg] = new_args[index]
                 # Mutate kwargs
                 for cand_kwarg in cand_kwargs:
@@ -821,21 +858,34 @@ class StateReproducer:
         print(f'States collected!')
         return examples
 
-    def reproduce_int(self)-> Dict[str, object]:
+    def reproduce_int(self) -> Dict[str, object]:
         buggy_vars = deepcopy(self.buggy_global_vars)
         buggy_vars.update(self.buggy_local_vars)
         return self.torch_predict(buggy_vars)
 
-    def improve(self, str_states, fun_gens: Dict[str, FunctionGenerator], reproduced_int, reproduced_local_vars, reproduced_global_vars):
-        examples = self.generate_args()
+    def improve(
+        self,
+        str_states,
+        fun_gens: Dict[str, FunctionGenerator],
+        reproduced_int,
+        *,
+        reproduced_local_vars=None,
+        reproduced_global_vars=None,
+        local_diffs=None,
+        global_diffs=None,
+    ):
+        examples = self.generate_args(ignore_first=True)
         for varname, fun in fun_gens.items():
-            fun.improve(str_states[varname], examples, reproduced_local_vars, reproduced_global_vars)
+            fun.improve(
+                str_states[varname],
+                examples,
+                reproduced_local_vars,
+                reproduced_global_vars,
+            )
 
-        return 
-
-    def reproduce(self)-> Dict[str, object]:
+    def reproduce(self) -> Dict[str, object]:
         print()
-        examples=self.generate_args()
+        examples = self.generate_args()
         if self.solution is not None:
             self.solution[1].update(self.solution[0])
             return self.solution[1]
@@ -843,9 +893,7 @@ class StateReproducer:
         fun_gens: Dict[str, FunctionGenerator] = dict()
         for varname, value in self.buggy_global_vars.items():
             if isinstance(value, str):
-                fun_gens[varname] = FunctionGenerator(
-                    varname, examples, self.buggy_local_vars, self.buggy_global_vars
-                )
+                fun_gens[varname] = FunctionGenerator(varname, examples, self.buggy_local_vars, self.buggy_global_vars)
 
         str_states = {}
 
@@ -866,9 +914,9 @@ class StateReproducer:
                     if not isinstance(value, str):
                         new_globals[varname] = value
 
-            reproduced_local_vars, reproduced_global_vars = self.run(new_args, new_kwargs, new_globals, verbose=False)
+            reproduced_local_vars, reproduced_global_vars = self.run(new_args, new_kwargs, new_globals, verbose=True)
             if reproduced_local_vars is None:
-                self.improve(str_states, fun_gens, reproduced_int, None, None)
+                self.improve(str_states, fun_gens, reproduced_int)
             local_diffs, global_diffs = self.is_vars_same(
                 prune_default_local_var(self.fn, reproduced_local_vars),
                 prune_default_global_var(self.fn, reproduced_global_vars),
@@ -879,5 +927,13 @@ class StateReproducer:
                 dict_args = dict(zip(self.arg_names, new_args))
                 return {**new_globals, **dict_args, **new_kwargs}
             print(f"Different output local: {local_diffs}, global: {global_diffs}")
-            self.improve(str_states, fun_gens, reproduced_int, reproduced_local_vars, reproduced_global_vars)
+            self.improve(
+                str_states,
+                fun_gens,
+                reproduced_int,
+                reproduced_local_vars=reproduced_local_vars,
+                reproduced_global_vars=reproduced_global_vars,
+                local_diffs=local_diffs,
+                global_diffs=global_diffs,
+            )
         raise TimeoutError

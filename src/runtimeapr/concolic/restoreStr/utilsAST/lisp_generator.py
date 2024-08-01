@@ -41,21 +41,22 @@ def lisp_from_examples(
         """(set-logic SLIA)
 (synth-fun f ("""
         + ' '.join([f'(_arg_{index} {curr_type})' for index, curr_type in enumerate(inType)])
-        + f""") {outType} 
-    ((Start {outType} (nt{outType})) 
-    (ntString String (
-        """
+        + f""") {outType}
+((Start {outType} (nt{outType}))
+ (ntString String (
+    """
         + ' '.join([f'_arg_{index}' for index, curr_type in enumerate(inType) if curr_type == 'String'])
         + """
 	"" " " """
         + ' '.join(str(new_str) for new_str in additional_str)
         + """
-	(str.++ ntString ntString) 
-	(str.replace ntString ntString ntString) 
+	(str.++ ntString ntString)
+	(str.replace ntString ntString ntString)
 	(str.at ntString ntInt)
 	(int.to.str ntInt)
 	(ite ntBool ntString ntString)
 	(str.substr ntString ntInt ntInt)
+    (str.rev ntString)
 )) 
  (ntInt Int (
 	"""
@@ -67,12 +68,13 @@ def lisp_from_examples(
 	(+ ntInt ntInt)
 	(- ntInt ntInt)
 	(/ ntInt ntInt)
+    (* ntInt ntInt)
 	(% ntInt ntInt)
 	(str.len ntString)
 	(str.to.int ntString)
 	(ite ntBool ntInt ntInt)
 	(str.indexof ntString ntString ntInt)
-)) 
+))
  (ntBool Bool (
     """
         + ' '.join([f'_arg_{index}' for index, curr_type in enumerate(inType) if curr_type == 'Bool'])
@@ -88,6 +90,14 @@ def lisp_from_examples(
 
 """
     )
+
+    for i, ex in enumerate(examples):
+        if len(ex[0]) != len(inType):
+            new_ex = dict()
+            for key in ex[0]:
+                if not (key.startswith("__") and key.endswith("__")):
+                    new_ex[key] = ex[0][key]
+            examples[i] = (new_ex, ex[1])
 
     str_examples = list(
         map(

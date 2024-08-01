@@ -101,6 +101,8 @@ def list_ast_to_tast(last: Union[str, list]) -> TAST:
             list_ast_to_tast(last[2]),
             list_ast_to_tast(last[3]),
         )
+    if last[0] == "str.rev":
+        return Rev(list_ast_to_tast(last[1]))
     if last[0] == "+":
         return Add(list_ast_to_tast(last[1]), list_ast_to_tast(last[2]))
     if last[0] == "-":  # either unary or binary minus

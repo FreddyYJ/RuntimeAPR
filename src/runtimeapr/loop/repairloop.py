@@ -3,6 +3,7 @@ import inspect
 import json
 import os
 import pickle
+import subprocess
 import sys
 from types import FrameType, FunctionType, MethodType
 from typing import Any, Dict, List, Optional, Set, Tuple, Union
@@ -25,6 +26,7 @@ from ..concolic.restate import StateReproducer
 from ..concolic.defusegraph import DependencyGraph
 
 is_concolic_execution=False
+use_criu = False
 
 class RepairloopRunner:
     def __init__(self, fn:FunctionType, args, kwargs, bug_info:BugInformation,target_func:ast.FunctionDef,func_code:str):
@@ -510,11 +512,17 @@ class RepairloopRunner:
         return is_same
     
 def except_handler(e:Exception):
-    global is_concolic_execution
+    global is_concolic_execution, use_criu
     if is_concolic_execution:
         raise
     else:
         is_concolic_execution=True
+    if use_criu:
+        filepath = "/" + os.path.join("",*__file__.split('/')[:-1])
+        filename = __file__.split('/')[-1].split(".")[0]
+        if not os.path.exists(f"{filepath}/../../{filename}/"):
+            os.mkdir(f"{filepath}/../../criu/{filename}/")
+        subprocess.run([f"criu dump --tree {os.getpid()} --images-dir {filepath}/../../{filename}/ --leave-running"])
     innerframes=inspect.getinnerframes(e.__traceback__)
     innerframes.reverse()
     outerframes=inspect.getouterframes(e.__traceback__.tb_frame)

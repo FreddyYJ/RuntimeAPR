@@ -8,13 +8,15 @@ type rewrite =
   | FuncRewrite of id * rewrite list
 
 let rec pretty_print_rewrite rewrite_obj =
-  match rewrite_obj with
-  | NTRewrite s -> print_string s
-  | ExprRewrite e -> print_string (string_of_expr e)
+  let () = match rewrite_obj with
+  | NTRewrite s -> print_string "NTRewrite "; print_string s
+  | ExprRewrite e -> print_string "ExprRewrite "; print_string (string_of_expr e)
   | FuncRewrite (id, rw_list) ->
       print_string "Func " ;
-      print_string id ;
+      print_endline id ;
       List.iter pretty_print_rewrite rw_list
+  in print_newline ()
+  
 
 let nt_type_map = ref BatMap.empty
 
@@ -66,7 +68,8 @@ let ret_type_of_op rule =
   else if String.compare op "str.indexof" = 0 then Int
   else if String.compare op "str.replace" = 0 then String
   else if String.compare op "str.substr" = 0 then String
-  else if String.compare op "str.rev" = 0 then String (** BV theory **)
+  else if String.compare op "str.rev" = 0 then String
+  (** BV theory **)
   else if String.compare op "bvadd" = 0 then BV
   else if String.compare op "bvsub" = 0 then BV
   else if String.compare op "bvneg" = 0 then BV

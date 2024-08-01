@@ -162,7 +162,7 @@ let witness available_height nt_sigs
         (fun arg0_sig ->
           BatList.for_all
             (fun (arg0_const, output_const) ->
-              String.length (get_string arg0_const) = get_int output_const )
+              size_of_string (get_string arg0_const) = get_int output_const ) 
             (BatList.combine arg0_sig output_sig) )
         nt_sigs
   else if String.compare op "str.to.int" = 0 then
