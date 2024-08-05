@@ -1,0 +1,232 @@
+#!/bin/bash
+COMMAND="$0 $@"
+VERBOSE=0
+DOCKER=0
+#TODO: remove it
+
+LOG_FILE="axolotl.log"
+WORKING_DIR=$(pwd)
+PYTHON=python
+SLEEP=1
+MAX_SAVES=-1
+curr=$PWD
+framework_location="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
+cd $curr
+image_dir="$framework_location/crui_dump"
+
+usage="\
+    -[h?] | --help
+        Show this message.
+    -v | --verbose
+        Print additional information.
+    -d | --docker
+        Run it on docker rather than on a process.
+    -l | --log <file.log>
+        File for the logs.
+    -n | --normal-run
+        Run the program without any additional work (simple interpretor call)
+    -D | --working-dir
+        The directory in which the images and additional files will be saved.
+    -m | --max-saves
+        The maximal number of backup stored. Default -1 represents an infinite amount.
+"
+
+function Help() {
+	cat >&2 <<-EOF
+Syntax: sudo ${0##*/} [ OPTIONS ] script_to_run.py
+With OPTION among the following:
+		$usage
+EOF
+	exit 2
+}
+
+###Read the flag of checkout
+opt_short="hvdl:nDm:"
+opt_long="help,verbose,docker,log:,normal-run,working-dir,max-saves:"
+
+OPTS=$(getopt -o "$opt_short" -l "$opt_long" -- "$@")
+
+if [ $? -ne 0 ] ; then
+        echo "Wrong input parameter!"; 1>&2
+        exit 1;
+fi
+
+eval set -- "$OPTS"
+
+while true
+do
+    case "$1" in
+        -h|--help) Help;;
+        -v|--verbose) VERBOSE=1; shift;;
+        -d|--docker) DOCKER=1; shift;;
+        -l|--log) [[ ! "$2" =~ ^- ]] && LOG_FILE=$2; shift 2 ;;
+        -n|--normal-run) NORMAL_RUN=1; shift;;
+        -D|--working-dir) [[ ! "$2" =~ ^- ]] && WORKING_DIR=$2; shift 2 ;;
+        -m|--max-saves) [[ ! "$2" =~ ^- ]] && MAX_SAVES=$2; shift 2 ;;
+        --) shift; break ;;
+    esac
+done
+
+## Tests to ensure the right usage
+if [[ "$WORKING_DIR" != "/"* ]] ; then
+    WORKING_DIR="$(pwd)/$WORKING_DIR"
+fi
+
+if [[ "$LOG_FILE" != "/"* ]] ; then
+    LOG_FILE="$WORKING_DIR/$LOG_FILE"
+fi
+> $LOG_FILE
+
+if [[ "$WORKING_DIR" != "$(pwd)" ]] ; then
+    image_dir="$WORKING_DIR/crui_dump"
+fi
+
+if [ $# -ne 1 ] ; then
+    echo "Wronng number of arguments '$*'. Please follow the syntax." >&2
+    Help
+fi
+
+PROGRAM=$1
+if [ ! -f "$PROGRAM" ] ; then
+    echo "File '$PROGRAM' does not exists." 1>&2
+    exit 1
+fi
+if [[ "$(cut -d'.' -f2 <<< $PROGRAM)" != "py" ]] ; then
+    echo "Unsupported argument '$PROGRAM'. Only python program are supported yet." >&2
+    exit 1
+fi
+
+if [[ "$NORMAL_RUN" == "1" ]] ; then
+    if [[ "$VERBOSE" == "1" ]] ; then
+        echo "Running $PROGRAM without repair."
+    fi
+    $PYTHON $PROGRAM
+    exit $?
+fi
+
+# Ensures the script is ran with root privilege
+if [[ $UID != 0 ]] ; then
+    echo "Please run this script with root privilege:"
+    echo "sudo $COMMAND."
+    exit 1
+fi
+
+# if [ -n $($PYTHON -m pip list | grep -F runtimeapr) ] ; then
+#     $PYTHON -m pip install --upgrade pip >/dev/null
+#     $PYTHON -m pip install $framework_location >/dev/null
+# fi
+PYTHON="$PYTHON -m runtimeapr"
+
+if [ -d $image_dir ] ; then
+    rm -rf $image_dir
+fi
+
+## Some helper functions to make the main loop easy to read
+# void run_program() // run the program in parallel or in another container
+function run_program() {
+    if [[ "$DOCKER" == "1" ]] ; then
+        docker_image=$(sudo docker run --security-opt=seccomp:unconfined --name "$PROGRAM$switch" -d busybox /bin/sh -c "$PYTHON $PROGRAM")
+        if [[ "$VERBOSE" == "1" ]] ; then
+            echo "Start running in docker '$docker_image'."
+        fi
+    else
+        setsid $PYTHON $PROGRAM  < /dev/null 2> error.log & _pid=$!
+        if [[ "$VERBOSE" == "1" ]] ; then
+            echo "Start running in pid '$_pid'."
+        fi
+    fi
+}
+# void save_checkpoint(int _step, str image_dir) // save a checkpoint of the running program, does not stop it
+function save_checkpoint() {
+    if [[ "$VERBOSE" == "1" ]] ; then
+        echo "Saving checkpoint: $_step"
+    fi
+    if [[ "$DOCKER" == "1" ]] ; then
+        if [[ ! -z "$(sudo docker checkpoint ls "$PROGRAM$switch" | grep "checkpoint$_step")" ]] ; then
+            if [[ "$VERBOSE" == "1" ]] ; then
+                echo "Docker checkpoint already exists, removing..."
+            fi
+            sudo docker checkpoint rm "$PROGRAM$switch" "checkpoint$_step" &>> $LOG_FILE
+        fi
+        sudo docker checkpoint create "$PROGRAM$switch" "checkpoint$_step" --leave-running &>> $LOG_FILE
+    else
+        if [[ "$_step" == "0" ]] ; then
+            if [ -d "$image_dir/0/" ] ; then
+                if [[ "$VERBOSE" == "1" ]] ; then
+                    echo "Checkpoint already exists, removing..."
+                fi
+                rm -rf "$image_dir/*" # all checkpoints depend on the first one
+            fi
+            mkdir -p "$image_dir/0/"
+            sudo criu dump --tree "$_pid" --images-dir "$image_dir/0/" --leave-running --track-mem --shell-job -v2 &>> $LOG_FILE
+        else
+            if [ -d "$image_dir/$_step/" ] ; then
+                rm -rf "$image_dir/$_step/"
+            fi
+            mkdir "$image_dir/$_step/"
+            echo "File: $image_dir/$_step/" >> $LOG_FILE
+            sudo criu dump --tree "$_pid" --images-dir "$image_dir/$_step/" --leave-running --track-mem --prev-images-dir "../$((_step-1))/" --shell-job -v2 --action-script "$framework_location/action_script.sh" &>> $LOG_FILE
+        fi
+    fi
+}
+# void repair() // run the repair process
+function repair() {
+    if [[ "$DOCKER" == "1" ]] ; then
+        out=$(sudo docker logs "$PROGRAM$switch")
+        printf "%s\n" "${message#*Modeline }" > error.log
+    fi
+    if [[ "$VERBOSE" == "1" ]] ; then
+        echo "Running repair" #: $PYTHON \"$framework_location/src/axolotl/repair.py\" \"$(pwd)/$PROGRAM\" \"error.log\" \"$(pwd)/$PROGRAM\""
+    fi
+    $PYTHON $framework_location/src/axolotl/repair.py "$(pwd)/$PROGRAM" error.log "$(pwd)/$PROGRAM" #overwrite the code
+
+    #repaired_program=$($PYTHON "$framework_location/src/axolotl/repair.py" "$(pwd)/$PROGRAM" "error.log")
+    cat error.log >> $LOG_FILE
+    > error.log
+    echo "Regenrated program:" >> $LOG_FILE
+    cat $PROGRAM >> $LOG_FILE
+}
+
+# void restore_checkpoint(int switch, int last_change)
+function restore_checkpoint() {
+    if [[ "$DOCKER" == "1" ]] ; then
+        old_switch=$switch
+        switch=$((switch++ % 2))
+        sudo docker create --name "$PROGRAM$switch" --security-opt seccomp:unconfined busybox /binaction/sh -c "$PYTHON $PROGRAM" &>> $LOG_FILE
+        sudo docker start --checkpoint "checkpoint$last_change" $PROGRAM$switch >> $LOG_FILE
+        sudo docker remove "$PROGRAM$old_switch" &>> $LOG_FILE
+    else
+    #"$framework_location/action_script.sh /home/fred/ENS/Stage/M1/RuntimeAPR/test.py" 
+        criu restore -v2 --shell-job -D "$image_dir/$last_change/" --action-script "$framework_location/action_script.sh" &>> $LOG_FILE
+    fi
+
+    if [[ "$VERBOSE" == "1" ]] ; then
+        echo "RESTORE AND REPAIR END"
+    fi
+}
+
+switch=0
+_step=0
+truc=0
+last_change=0
+
+# main loop
+run_program
+
+while true; do
+    sleep $SLEEP
+    if  [[ "$(cat error.log)" != "" ]] ; then # the program has stopped
+        last_change=$((_step-1))
+        if [[ "$MAX_SAVES" != "-1" ]] ; then
+            last_change=$(((last_change+MAX_SAVES) % MAX_SAVES))
+        fi
+        repair
+        restore_checkpoint
+    else
+        save_checkpoint
+        ((_step++))
+        if [[ "$MAX_SAVES" != "-1" ]] ; then
+            _step=$((_step % MAX_SAVES))
+        fi
+    fi
+done
